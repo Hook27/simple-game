@@ -6,194 +6,11 @@
   <title>Rots-Papier-Schaar</title>
   <link rel="stylesheet" href="stijl.css">
   <style>
-    .keuze-rij {
-      display: flex;
-      gap: 10px;
-      margin-bottom: 12px;
-      flex-wrap: wrap;
-      justify-content: center;
-    }
-
-    .keuze-knop {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 6px;
-      padding: 12px 20px;
-      background: rgba(255,255,255,0.06);
-      border: 2px solid rgba(255,255,255,0.12);
-      border-radius: 16px;
-      cursor: pointer;
-      transition: transform 0.18s, border-color 0.18s, background 0.18s, box-shadow 0.18s;
-      color: #e2e8f0;
-      min-width: 90px;
-    }
-
-    .keuze-knop:hover {
-      transform: translateY(-5px) scale(1.04);
-      border-color: rgba(99,179,237,0.6);
-      background: rgba(99,179,237,0.1);
-      box-shadow: 0 8px 24px rgba(0,0,0,0.3), 0 0 0 1px rgba(99,179,237,0.2);
-    }
-
-    .keuze-knop:active  { transform: scale(0.97); }
-    .keuze-knop:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
-
-    .keuze-knop.geselecteerd {
-      border-color: #4299e1;
-      background: rgba(66,153,225,0.15);
-      box-shadow: 0 0 18px rgba(66,153,225,0.3);
-    }
-
-    .keuze-emoji { font-size: 2.1rem; line-height: 1; transition: transform 0.2s; }
-    .keuze-knop:hover .keuze-emoji { transform: scale(1.15) rotate(-5deg); }
-    .keuze-naam  { font-size: 0.85rem; font-weight: 600; }
-
-    /* ── Bo3-tracker ───────────────────────── */
-    .bo3-tracker {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 8px;
-    }
-
-    .bo3-label {
-      font-size: 0.65rem;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      color: rgba(144,205,244,0.5);
-      margin-right: 4px;
-    }
-
-    .ronde-bol {
-      width: 34px;
-      height: 34px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.72rem;
-      font-weight: 700;
-      border: 2px solid rgba(255,255,255,0.12);
-      background: rgba(255,255,255,0.05);
-      color: rgba(255,255,255,0.25);
-      transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
-    }
-
-    .ronde-bol.huidig {
-      border-color: #4299e1;
-      color: #90cdf4;
-      background: rgba(66,153,225,0.14);
-      box-shadow: 0 0 10px rgba(66,153,225,0.3);
-    }
-
-    .ronde-bol.win {
-      border-color: #38a169;
-      background: rgba(56,161,105,0.22);
-      color: #68d391;
-      font-size: 1rem;
-    }
-
-    .ronde-bol.verlies {
-      border-color: #e53e3e;
-      background: rgba(229,62,62,0.18);
-      color: #fc8181;
-      font-size: 1rem;
-    }
-
-    .ronde-bol.gelijk {
-      border-color: #ecc94b;
-      background: rgba(236,201,75,0.15);
-      color: #f6e05e;
-      font-size: 1rem;
-    }
-
-    /* ── Arena ─────────────────────────────── */
-    .arena {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 20px;
-      margin-bottom: 8px;
-      min-height: 100px;
-    }
-
-    .arena-kant {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 6px;
-      width: 110px;
-    }
-
-    .arena-label {
-      font-size: 0.68rem;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      color: #90cdf4;
-    }
-
-    .arena-emoji {
-      font-size: 3.2rem;
-      line-height: 1;
-      min-height: 52px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: transform 0.3s;
-    }
-
-    .arena-emoji.schudden { animation: schud 0.5s ease-in-out; }
-
-    @keyframes schud {
-      0%,100% { transform: translateY(0) rotate(0); }
-      20%     { transform: translateY(-12px) rotate(-8deg); }
-      40%     { transform: translateY(-6px)  rotate(6deg); }
-      60%     { transform: translateY(-10px) rotate(-5deg); }
-      80%     { transform: translateY(-3px)  rotate(4deg); }
-    }
-
-    .vs-tekst {
-      font-size: 1.4rem;
-      font-weight: 900;
-      color: rgba(255,255,255,0.18);
-      user-select: none;
-    }
-
-    /* ── Resultaat huidige ronde ───────────── */
-    .resultaat-balk {
-      min-height: 32px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-bottom: 10px;
-    }
-
-    .resultaat-badge {
-      padding: 6px 20px;
-      border-radius: 50px;
-      font-size: 0.9rem;
-      font-weight: 700;
-      letter-spacing: 0.3px;
-      animation: badge-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-      opacity: 0;
-    }
-
-    .resultaat-badge.toon     { opacity: 1; }
-    .resultaat-badge.gewonnen { background: rgba(56,161,105,0.2);  border: 1.5px solid #38a169; color: #68d391; }
-    .resultaat-badge.verloren { background: rgba(229,62,62,0.15);  border: 1.5px solid #e53e3e; color: #fc8181; }
-    .resultaat-badge.gelijk   { background: rgba(236,201,75,0.15); border: 1.5px solid #ecc94b; color: #f6e05e; }
-
-    @keyframes badge-in {
-      from { transform: scale(0.7); opacity: 0; }
-      to   { transform: scale(1);   opacity: 1; }
-    }
-
-    /* ── Totaal scorebord (match-wins) ─────── */
+    /* ── Totaal scorebord ──────────────────── */
     .score-rij {
       display: flex;
       gap: 10px;
-      margin-bottom: 10px;
+      margin-bottom: 14px;
       flex-wrap: wrap;
       justify-content: center;
     }
@@ -218,44 +35,224 @@
     .score-blok.verloren-blok .score-waarde { color: #fc8181; }
     .score-blok.gelijk-blok   .score-waarde { color: #f6e05e; }
 
-    /* ── Ronde-tekst ───────────────────────── */
-    .rondes-tekst {
-      color: rgba(144,205,244,0.65);
-      font-size: 0.75rem;
-      margin-bottom: 8px;
-      letter-spacing: 0.4px;
-    }
-
-    .knoppen-rij { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
-
-    /* ── Popup uitbreiding (score-overzicht) ── */
-    .popup-score-rij {
+    /* ── Drie ronde-kaarten ────────────────── */
+    .rondes-rij {
       display: flex;
-      justify-content: center;
       gap: 10px;
-      margin: 12px 0 18px;
+      margin-bottom: 16px;
+      width: 100%;
+      max-width: 460px;
     }
 
-    .popup-ronde-bol {
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
+    .ronde-kaart {
+      flex: 1;
+      background: rgba(255,255,255,0.04);
+      border: 2px solid rgba(255,255,255,0.09);
+      border-radius: 14px;
+      padding: 10px 6px 8px;
+      text-align: center;
+      opacity: 0.38;
+      transition: border-color 0.35s, background 0.35s, box-shadow 0.35s, opacity 0.35s;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+    }
+
+    .ronde-kaart.actief {
+      opacity: 1;
+      border-color: #4299e1;
+      background: rgba(66,153,225,0.07);
+      box-shadow: 0 0 16px rgba(66,153,225,0.22);
+    }
+
+    .ronde-kaart.actief .kaart-label { color: #90cdf4; }
+
+    .ronde-kaart.win {
+      opacity: 1;
+      border-color: #38a169;
+      background: rgba(56,161,105,0.1);
+      animation: kaart-pop 0.45s cubic-bezier(0.34,1.56,0.64,1) both;
+    }
+
+    .ronde-kaart.verlies {
+      opacity: 1;
+      border-color: #e53e3e;
+      background: rgba(229,62,62,0.08);
+      animation: kaart-pop 0.45s cubic-bezier(0.34,1.56,0.64,1) both;
+    }
+
+    .ronde-kaart.gelijk {
+      opacity: 1;
+      border-color: #ecc94b;
+      background: rgba(236,201,75,0.08);
+      animation: kaart-pop 0.45s cubic-bezier(0.34,1.56,0.64,1) both;
+    }
+
+    @keyframes kaart-pop {
+      0%   { transform: scale(0.88); }
+      100% { transform: scale(1); }
+    }
+
+    /* ── Kaart-inhoud ──────────────────────── */
+    .kaart-label {
+      font-size: 0.6rem;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.25);
+      margin-bottom: 8px;
+      font-weight: 600;
+      transition: color 0.3s;
+    }
+
+    .kaart-emojis {
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 1.1rem;
-      font-weight: 700;
-      border: 2px solid transparent;
+      gap: 5px;
+      margin-bottom: 8px;
     }
 
-    .popup-ronde-bol.win     { background: rgba(56,161,105,0.25);  border-color: #38a169; color: #68d391; }
-    .popup-ronde-bol.verlies { background: rgba(229,62,62,0.2);    border-color: #e53e3e; color: #fc8181; }
-    .popup-ronde-bol.gelijk  { background: rgba(236,201,75,0.15);  border-color: #ecc94b; color: #f6e05e; }
+    .kaart-emoji-slot {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+    }
+
+    .kaart-emoji {
+      font-size: clamp(1.4rem, 4vw, 1.8rem);
+      line-height: 1;
+      min-height: 1.8rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .kaart-emoji.schud { animation: kaart-schud 0.28s ease-in-out; }
+
+    @keyframes kaart-schud {
+      0%,100% { transform: translateY(0); }
+      40%     { transform: translateY(-6px) rotate(-8deg); }
+      70%     { transform: translateY(-3px) rotate(5deg); }
+    }
+
+    .kaart-rol {
+      font-size: 0.55rem;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.3);
+    }
+
+    .kaart-vs-teken {
+      font-size: 0.6rem;
+      font-weight: 900;
+      color: rgba(255,255,255,0.18);
+      padding-bottom: 16px;
+      align-self: center;
+    }
+
+    .kaart-scheidslijn {
+      width: 80%;
+      height: 1px;
+      background: rgba(255,255,255,0.08);
+      margin-bottom: 7px;
+    }
+
+    .kaart-uitslag {
+      font-size: 0.68rem;
+      font-weight: 700;
+      min-height: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3px 10px;
+      border-radius: 50px;
+      letter-spacing: 0.3px;
+    }
+
+    .kaart-uitslag.win     { color: #68d391; background: rgba(56,161,105,0.18); }
+    .kaart-uitslag.verlies { color: #fc8181; background: rgba(229,62,62,0.15); }
+    .kaart-uitslag.gelijk  { color: #f6e05e; background: rgba(236,201,75,0.14); }
+
+    /* ── Keuze-knoppen ─────────────────────── */
+    .keuze-rij {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 14px;
+      justify-content: center;
+    }
+
+    .keuze-knop {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      padding: 11px 18px;
+      background: rgba(255,255,255,0.06);
+      border: 2px solid rgba(255,255,255,0.12);
+      border-radius: 14px;
+      cursor: pointer;
+      transition: transform 0.18s, border-color 0.18s, background 0.18s, box-shadow 0.18s;
+      color: #e2e8f0;
+      min-width: 84px;
+    }
+
+    .keuze-knop:hover {
+      transform: translateY(-4px) scale(1.04);
+      border-color: rgba(99,179,237,0.6);
+      background: rgba(99,179,237,0.1);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.25), 0 0 0 1px rgba(99,179,237,0.2);
+    }
+
+    .keuze-knop:active   { transform: scale(0.96); }
+    .keuze-knop:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+
+    .keuze-knop.geselecteerd {
+      border-color: #4299e1;
+      background: rgba(66,153,225,0.15);
+    }
+
+    .keuze-emoji { font-size: 1.9rem; line-height: 1; transition: transform 0.2s; }
+    .keuze-knop:hover .keuze-emoji { transform: scale(1.15) rotate(-5deg); }
+    .keuze-naam  { font-size: 0.8rem; font-weight: 600; }
+
+    /* ── Eindstand (inline, na 3 rondes) ───── */
+    .eindstand {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      width: 100%;
+      max-width: 460px;
+      background: rgba(255,255,255,0.05);
+      border: 1.5px solid rgba(255,255,255,0.12);
+      border-radius: 16px;
+      padding: 18px 20px 16px;
+      text-align: center;
+    }
+
+    .eindstand.toon {
+      display: flex;
+      animation: eindstand-in 0.5s cubic-bezier(0.34,1.56,0.64,1) both;
+    }
+
+    @keyframes eindstand-in {
+      from { transform: translateY(16px) scale(0.94); opacity: 0; }
+      to   { transform: translateY(0)    scale(1);    opacity: 1; }
+    }
+
+    .eindstand.win     { border-color: rgba(56,161,105,0.45);  background: rgba(56,161,105,0.07); }
+    .eindstand.verlies { border-color: rgba(229,62,62,0.4);    background: rgba(229,62,62,0.06); }
+    .eindstand.gelijk  { border-color: rgba(236,201,75,0.4);   background: rgba(236,201,75,0.06); }
+
+    .eindstand-emoji { font-size: 2.4rem; line-height: 1; }
+    .eindstand-titel { font-size: 1.15rem; font-weight: 800; color: #fff; }
+    .eindstand-sub   { font-size: 0.78rem; color: #90cdf4; margin-bottom: 4px; }
 
     @media (max-width: 400px) {
-      .keuze-knop { min-width: 76px; padding: 10px 14px; }
-      .arena-kant { width: 90px; }
-      .arena-emoji { font-size: 2.6rem; }
+      .keuze-knop { min-width: 72px; padding: 9px 12px; }
+      .keuze-emoji { font-size: 1.6rem; }
     }
   </style>
 </head>
@@ -274,7 +271,7 @@
     <h1 class="spel-titel">Rots-Papier-Schaar</h1>
     <p class="spel-subtitel">Best of Three — wie wint 2 van de 3 rondes?</p>
 
-    <!-- Totaal scorebord (match-wins over meerdere potjes) -->
+    <!-- Totaal scorebord (match-wins over alle potjes) -->
     <div class="score-rij">
       <div class="score-blok gewonnen-blok">
         <div class="score-label">Jij gewonnen</div>
@@ -290,36 +287,63 @@
       </div>
     </div>
 
-    <!-- Best-of-3 ronde tracker -->
-    <div class="bo3-tracker">
-      <span class="bo3-label">Rondes</span>
-      <div class="ronde-bol" id="bol-0">R1</div>
-      <div class="ronde-bol" id="bol-1">R2</div>
-      <div class="ronde-bol" id="bol-2">R3</div>
-    </div>
+    <!-- Drie ronde-kaarten naast elkaar -->
+    <div class="rondes-rij">
 
-    <!-- Huidige ronde tekst -->
-    <div class="rondes-tekst" id="rondes-tekst">Ronde 1 van 3 — Maak je keuze!</div>
-
-    <!-- Arena -->
-    <div class="arena">
-      <div class="arena-kant">
-        <div class="arena-label">Jij</div>
-        <div class="arena-emoji" id="arena-jij">❓</div>
+      <div class="ronde-kaart actief" id="kaart-0">
+        <div class="kaart-label">Ronde 1</div>
+        <div class="kaart-emojis">
+          <div class="kaart-emoji-slot">
+            <div class="kaart-emoji" id="emoji-jij-0">❓</div>
+            <div class="kaart-rol">Jij</div>
+          </div>
+          <div class="kaart-vs-teken">vs</div>
+          <div class="kaart-emoji-slot">
+            <div class="kaart-emoji" id="emoji-ai-0">❓</div>
+            <div class="kaart-rol">AI</div>
+          </div>
+        </div>
+        <div class="kaart-scheidslijn"></div>
+        <div class="kaart-uitslag" id="uitslag-0"></div>
       </div>
-      <div class="vs-tekst">VS</div>
-      <div class="arena-kant">
-        <div class="arena-label">AI</div>
-        <div class="arena-emoji" id="arena-ai">❓</div>
+
+      <div class="ronde-kaart" id="kaart-1">
+        <div class="kaart-label">Ronde 2</div>
+        <div class="kaart-emojis">
+          <div class="kaart-emoji-slot">
+            <div class="kaart-emoji" id="emoji-jij-1">❓</div>
+            <div class="kaart-rol">Jij</div>
+          </div>
+          <div class="kaart-vs-teken">vs</div>
+          <div class="kaart-emoji-slot">
+            <div class="kaart-emoji" id="emoji-ai-1">❓</div>
+            <div class="kaart-rol">AI</div>
+          </div>
+        </div>
+        <div class="kaart-scheidslijn"></div>
+        <div class="kaart-uitslag" id="uitslag-1"></div>
       </div>
+
+      <div class="ronde-kaart" id="kaart-2">
+        <div class="kaart-label">Ronde 3</div>
+        <div class="kaart-emojis">
+          <div class="kaart-emoji-slot">
+            <div class="kaart-emoji" id="emoji-jij-2">❓</div>
+            <div class="kaart-rol">Jij</div>
+          </div>
+          <div class="kaart-vs-teken">vs</div>
+          <div class="kaart-emoji-slot">
+            <div class="kaart-emoji" id="emoji-ai-2">❓</div>
+            <div class="kaart-rol">AI</div>
+          </div>
+        </div>
+        <div class="kaart-scheidslijn"></div>
+        <div class="kaart-uitslag" id="uitslag-2"></div>
+      </div>
+
     </div>
 
-    <!-- Resultaat huidige ronde -->
-    <div class="resultaat-balk">
-      <div class="resultaat-badge" id="resultaat-badge"></div>
-    </div>
-
-    <!-- Keuze-knoppen -->
+    <!-- Keuze-knoppen: altijd zichtbaar -->
     <div class="keuze-rij" id="keuze-rij">
       <button class="keuze-knop" data-keuze="rots">
         <span class="keuze-emoji">✊</span>
@@ -335,20 +359,17 @@
       </button>
     </div>
 
-    <div class="knoppen-rij">
-      <button class="knop gevaar" id="reset">Totaal resetten</button>
+    <!-- Eindstand (verschijnt na ronde 3) -->
+    <div class="eindstand" id="eindstand">
+      <div class="eindstand-emoji" id="eindstand-emoji"></div>
+      <div class="eindstand-titel" id="eindstand-titel"></div>
+      <div class="eindstand-sub"   id="eindstand-sub"></div>
+      <button class="knop" id="opnieuw">Opnieuw spelen</button>
     </div>
-  </div>
 
-  <!-- Match-einde popup -->
-  <div class="overlay" id="overlay">
-    <div class="popup">
-      <span class="popup-emoji" id="popup-emoji"></span>
-      <div class="popup-titel" id="popup-titel"></div>
-      <div class="popup-tekst" id="popup-tekst"></div>
-      <!-- Ronde-overzicht in popup -->
-      <div class="popup-score-rij" id="popup-score-rij"></div>
-      <button class="knop" id="popup-opnieuw">Nieuwe match</button>
+    <!-- Reset knop -->
+    <div style="margin-top:10px">
+      <button class="knop gevaar" id="reset">Totaal resetten</button>
     </div>
   </div>
 
@@ -356,12 +377,12 @@
     const KEUZES = ['rots', 'papier', 'schaar'];
     const EMOJI  = { rots: '✊', papier: '🖐️', schaar: '✌️' };
 
-    // Match-totaalscore (over meerdere best-of-3 potjes)
+    // Totaal over alle potjes
     let matchJij = 0, matchGelijk = 0, matchAI = 0;
 
     // Huidige best-of-3
     let rondeNummer  = 1;   // 1–3
-    let rondeResults = [];  // 'win' | 'verlies' | 'gelijk' per ronde
+    let rondeResults = [];  // 'win' | 'verlies' | 'gelijk'
     let bezig        = false;
 
     /* ── Hulpfuncties ─────────────────────── */
@@ -377,163 +398,132 @@
       document.querySelectorAll('.keuze-knop').forEach(k => { k.disabled = !enabled; });
     }
 
-    /* ── Tracker updaten ──────────────────── */
-    function updateTracker() {
-      for (let i = 0; i < 3; i++) {
-        const bol = document.getElementById(`bol-${i}`);
-        bol.className = 'ronde-bol';
-        if (i < rondeResults.length) {
-          const r = rondeResults[i];
-          bol.classList.add(r);
-          bol.textContent = r === 'win' ? '✓' : r === 'verlies' ? '✗' : '=';
-        } else if (i === rondeNummer - 1) {
-          bol.classList.add('huidig');
-          bol.textContent = `R${i + 1}`;
-        } else {
-          bol.textContent = `R${i + 1}`;
-        }
-      }
-    }
-
-    function updateRondeTekst() {
-      document.getElementById('rondes-tekst').textContent =
-        `Ronde ${rondeNummer} van 3 — Maak je keuze!`;
-    }
-
     /* ── Ronde spelen ─────────────────────── */
     function speelRonde(keuzeJij) {
       if (bezig || rondeNummer > 3) return;
       bezig = true;
+
+      const idx       = rondeNummer - 1;
+      const kaart     = document.getElementById(`kaart-${idx}`);
+      const emojiJij  = document.getElementById(`emoji-jij-${idx}`);
+      const emojiAI   = document.getElementById(`emoji-ai-${idx}`);
+      const uitslagEl = document.getElementById(`uitslag-${idx}`);
 
       setBolKnoppen(false);
       document.querySelectorAll('.keuze-knop').forEach(k => {
         if (k.dataset.keuze === keuzeJij) k.classList.add('geselecteerd');
       });
 
-      const badge    = document.getElementById('resultaat-badge');
-      const arenaJij = document.getElementById('arena-jij');
-      const arenaAI  = document.getElementById('arena-ai');
+      // Reset uitslag
+      uitslagEl.className  = 'kaart-uitslag';
+      uitslagEl.textContent = '';
 
-      badge.className  = 'resultaat-badge';
-      badge.textContent = '';
-      arenaJij.textContent = '❓';
-      arenaAI.textContent  = '❓';
-
-      // Countdown animatie
-      let teller = 0;
+      // Countdown animatie in de actieve kaart
       const tellen = ['✊', '✊✊', '✊✊✊'];
+      let teller = 0;
       const interval = setInterval(() => {
-        arenaJij.textContent = tellen[teller];
-        arenaAI.textContent  = tellen[teller];
-        arenaJij.classList.remove('schudden');
-        arenaAI.classList.remove('schudden');
-        void arenaJij.offsetWidth;
-        arenaJij.classList.add('schudden');
-        arenaAI.classList.add('schudden');
+        emojiJij.textContent = tellen[teller];
+        emojiAI.textContent  = tellen[teller];
+        emojiJij.classList.remove('schud');
+        emojiAI.classList.remove('schud');
+        void emojiJij.offsetWidth; // reflow voor herstart animatie
+        emojiJij.classList.add('schud');
+        emojiAI.classList.add('schud');
         teller++;
         if (teller >= 3) clearInterval(interval);
       }, 280);
 
+      // Onthulling na 900ms
       setTimeout(() => {
         const keuzeAI = KEUZES[Math.floor(Math.random() * 3)];
-        arenaJij.textContent = EMOJI[keuzeJij];
-        arenaAI.textContent  = EMOJI[keuzeAI];
-        arenaJij.classList.remove('schudden');
-        arenaAI.classList.remove('schudden');
+        emojiJij.textContent = EMOJI[keuzeJij];
+        emojiAI.textContent  = EMOJI[keuzeAI];
+        emojiJij.classList.remove('schud');
+        emojiAI.classList.remove('schud');
 
         const uitslag = bepaalWinnaar(keuzeJij, keuzeAI);
         rondeResults.push(uitslag);
-        updateTracker();
 
-        // Toon ronde-resultaat
-        if (uitslag === 'win') {
-          badge.className   = 'resultaat-badge gewonnen toon';
-          badge.textContent = '✓ Jij wint ronde ' + rondeNummer + '!';
-        } else if (uitslag === 'verlies') {
-          badge.className   = 'resultaat-badge verloren toon';
-          badge.textContent = '✗ AI wint ronde ' + rondeNummer + '!';
-        } else {
-          badge.className   = 'resultaat-badge gelijk toon';
-          badge.textContent = '= Gelijkspel in ronde ' + rondeNummer + '!';
-        }
+        // Kaart-stijl updaten
+        kaart.className = `ronde-kaart ${uitslag}`;
 
-        const wasLaatsteRonde = rondeNummer === 3;
+        // Uitslag-label in kaart
+        uitslagEl.className = `kaart-uitslag ${uitslag}`;
+        uitslagEl.textContent =
+          uitslag === 'win'     ? '✓ Jij wint!' :
+          uitslag === 'verlies' ? '✗ AI wint!'  : '= Gelijk!';
+
+        const wasLaatsteRonde = (rondeNummer === 3);
         rondeNummer++;
 
         if (wasLaatsteRonde) {
-          // Wacht iets langer zodat de badge zichtbaar is, dan popup
-          setTimeout(toonMatchEinde, 1300);
+          setBolKnoppen(false);
+          setTimeout(toonEindstand, 750);
         } else {
-          updateRondeTekst();
+          // Activeer volgende kaart
+          document.getElementById(`kaart-${rondeNummer - 1}`).classList.add('actief');
           setTimeout(() => {
             document.querySelectorAll('.keuze-knop').forEach(k => k.classList.remove('geselecteerd'));
             setBolKnoppen(true);
             bezig = false;
-          }, 1100);
+          }, 650);
         }
       }, 900);
     }
 
-    /* ── Match-einde ──────────────────────── */
-    function toonMatchEinde() {
+    /* ── Eindstand tonen ──────────────────── */
+    function toonEindstand() {
       const jijWins = rondeResults.filter(r => r === 'win').length;
       const aiWins  = rondeResults.filter(r => r === 'verlies').length;
+      const gelijks = 3 - jijWins - aiWins;
 
       let matchUitslag;
-      if      (jijWins > aiWins) { matchUitslag = 'win';     matchJij++;     }
-      else if (aiWins > jijWins) { matchUitslag = 'verlies'; matchAI++;      }
-      else                       { matchUitslag = 'gelijk';  matchGelijk++;  }
+      if      (jijWins > aiWins) { matchUitslag = 'win';     matchJij++;    }
+      else if (aiWins > jijWins) { matchUitslag = 'verlies'; matchAI++;     }
+      else                       { matchUitslag = 'gelijk';  matchGelijk++; }
 
-      // Update totaalbord
       document.getElementById('score-jij').textContent    = matchJij;
       document.getElementById('score-gelijk').textContent = matchGelijk;
       document.getElementById('score-ai').textContent     = matchAI;
 
-      // Popup vullen
-      const emoji = matchUitslag === 'win' ? '🏆' : matchUitslag === 'verlies' ? '🤖' : '🤝';
-      const titel = matchUitslag === 'win' ? 'Jij wint de match!' :
-                    matchUitslag === 'verlies' ? 'AI wint de match!' : 'Gelijkspel!';
-      const tekst = matchUitslag === 'win'
-        ? `Jij won ${jijWins} van de 3 rondes.`
-        : matchUitslag === 'verlies'
-          ? `De AI won ${aiWins} van de 3 rondes.`
-          : `Elke ronde werd gelijkgespeeld of jullie staan gelijk.`;
+      const eindstand = document.getElementById('eindstand');
+      eindstand.className = `eindstand toon ${matchUitslag}`;
 
-      document.getElementById('popup-emoji').textContent = emoji;
-      document.getElementById('popup-titel').textContent = titel;
-      document.getElementById('popup-tekst').textContent = tekst;
+      document.getElementById('eindstand-emoji').textContent =
+        matchUitslag === 'win' ? '🏆' : matchUitslag === 'verlies' ? '🤖' : '🤝';
 
-      // Ronde-bollen in popup
-      const scoreRij = document.getElementById('popup-score-rij');
-      scoreRij.innerHTML = rondeResults.map(r => {
-        const sym  = r === 'win' ? '✓' : r === 'verlies' ? '✗' : '=';
-        return `<div class="popup-ronde-bol ${r}">${sym}</div>`;
-      }).join('');
+      document.getElementById('eindstand-titel').textContent =
+        matchUitslag === 'win'     ? 'Jij wint de match!' :
+        matchUitslag === 'verlies' ? 'AI wint de match!'  : 'Gelijkspel!';
 
-      document.getElementById('overlay').classList.add('toon');
+      const subDelen = [];
+      if (jijWins > 0)  subDelen.push(`Jij: ${jijWins}×✓`);
+      if (aiWins > 0)   subDelen.push(`AI: ${aiWins}×✗`);
+      if (gelijks > 0)  subDelen.push(`${gelijks}×=`);
+      document.getElementById('eindstand-sub').textContent = subDelen.join('  ·  ');
     }
 
-    /* ── Nieuwe match starten ─────────────── */
+    /* ── Nieuw potje ──────────────────────── */
     function nieuwMatch() {
       rondeNummer  = 1;
       rondeResults = [];
       bezig        = false;
 
-      document.getElementById('arena-jij').textContent = '❓';
-      document.getElementById('arena-ai').textContent  = '❓';
+      // Reset alle kaarten
+      for (let i = 0; i < 3; i++) {
+        document.getElementById(`kaart-${i}`).className = 'ronde-kaart' + (i === 0 ? ' actief' : '');
+        document.getElementById(`emoji-jij-${i}`).textContent = '❓';
+        document.getElementById(`emoji-ai-${i}`).textContent  = '❓';
+        const u = document.getElementById(`uitslag-${i}`);
+        u.className   = 'kaart-uitslag';
+        u.textContent = '';
+      }
 
-      const badge = document.getElementById('resultaat-badge');
-      badge.className  = 'resultaat-badge';
-      badge.textContent = '';
-
+      document.getElementById('eindstand').className = 'eindstand';
       document.querySelectorAll('.keuze-knop').forEach(k => {
         k.disabled = false;
         k.classList.remove('geselecteerd');
       });
-
-      updateTracker();
-      updateRondeTekst();
-      document.getElementById('overlay').classList.remove('toon');
     }
 
     /* ── Events ───────────────────────────── */
@@ -543,7 +533,7 @@
       speelRonde(knop.dataset.keuze);
     });
 
-    document.getElementById('popup-opnieuw').addEventListener('click', nieuwMatch);
+    document.getElementById('opnieuw').addEventListener('click', nieuwMatch);
 
     document.getElementById('reset').addEventListener('click', () => {
       matchJij = matchGelijk = matchAI = 0;
@@ -552,9 +542,6 @@
       document.getElementById('score-ai').textContent     = '0';
       nieuwMatch();
     });
-
-    /* ── Init ─────────────────────────────── */
-    updateTracker();
   </script>
 </body>
 </html>
