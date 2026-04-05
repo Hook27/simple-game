@@ -3,363 +3,187 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Memory Match</title>
+  <title>Spelletjes</title>
+  <link rel="stylesheet" href="stijl.css">
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    .hero {
+      text-align: center;
+      padding: 48px 0 40px;
+    }
 
-    body {
-      min-height: 100vh;
-      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    .hero-emoji {
+      font-size: 3.5rem;
+      display: block;
+      margin-bottom: 16px;
+      animation: float 3s ease-in-out infinite;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50%       { transform: translateY(-10px); }
+    }
+
+    .hero h1 {
+      font-size: clamp(2rem, 5vw, 3rem);
+      font-weight: 900;
+      letter-spacing: -1px;
+      margin-bottom: 12px;
+      text-shadow: 0 0 30px rgba(99,179,237,0.5);
+    }
+
+    .hero p {
+      color: #90cdf4;
+      font-size: 1rem;
+      max-width: 420px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+
+    .spellen-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 20px;
+      width: 100%;
+      max-width: 840px;
+      margin-top: 8px;
+    }
+
+    .spel-kaart {
+      background: rgba(255,255,255,0.05);
+      border: 1.5px solid rgba(255,255,255,0.1);
+      border-radius: 20px;
+      padding: 32px 24px 28px;
+      text-align: center;
+      text-decoration: none;
+      color: inherit;
+      transition: transform 0.2s, border-color 0.2s, background 0.2s, box-shadow 0.2s;
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
-      font-family: 'Segoe UI', system-ui, sans-serif;
-      padding: 20px;
-    }
-
-    h1 {
-      color: #e2e8f0;
-      font-size: clamp(1.6rem, 4vw, 2.4rem);
-      letter-spacing: 2px;
-      margin-bottom: 6px;
-      text-shadow: 0 0 20px rgba(99, 179, 237, 0.6);
-    }
-
-    .subtitle {
-      color: #90cdf4;
-      font-size: 0.85rem;
-      margin-bottom: 20px;
-      letter-spacing: 1px;
-    }
-
-    .stats {
-      display: flex;
-      gap: 24px;
-      margin-bottom: 24px;
-    }
-
-    .stat {
-      background: rgba(255,255,255,0.07);
-      border: 1px solid rgba(255,255,255,0.12);
-      border-radius: 12px;
-      padding: 10px 22px;
-      text-align: center;
-      backdrop-filter: blur(6px);
-    }
-
-    .stat-label {
-      color: #90cdf4;
-      font-size: 0.7rem;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-    }
-
-    .stat-value {
-      color: #fff;
-      font-size: 1.6rem;
-      font-weight: 700;
-      line-height: 1.2;
-    }
-
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 14px;
-      max-width: 480px;
-      width: 100%;
-    }
-
-    .card {
-      aspect-ratio: 1;
-      cursor: pointer;
-      perspective: 600px;
-      border-radius: 14px;
-    }
-
-    .card-inner {
+      gap: 10px;
       position: relative;
-      width: 100%;
-      height: 100%;
-      transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
-      transform-style: preserve-3d;
-      border-radius: 14px;
+      overflow: hidden;
     }
 
-    .card.flipped .card-inner,
-    .card.matched .card-inner {
-      transform: rotateY(180deg);
-    }
-
-    .card-front,
-    .card-back {
-      position: absolute;
-      inset: 0;
-      border-radius: 14px;
-      backface-visibility: hidden;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: clamp(1.6rem, 5vw, 2.2rem);
-      user-select: none;
-    }
-
-    /* Card back (hidden face) */
-    .card-back {
-      background: linear-gradient(135deg, #2d3748, #1a202c);
-      border: 2px solid rgba(99,179,237,0.3);
-      color: rgba(99,179,237,0.5);
-      font-size: 1.4rem;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06);
-    }
-
-    .card-back::after {
+    .spel-kaart::before {
       content: '';
       position: absolute;
-      inset: 6px;
-      border-radius: 9px;
-      border: 1px dashed rgba(99,179,237,0.2);
+      inset: 0;
+      background: linear-gradient(135deg, rgba(66,153,225,0.08) 0%, transparent 60%);
+      opacity: 0;
+      transition: opacity 0.3s;
     }
 
-    /* Card front (emoji face) */
-    .card-front {
-      background: linear-gradient(135deg, #2b4162, #12100e);
-      border: 2px solid rgba(99,179,237,0.5);
-      transform: rotateY(180deg);
-      box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    .spel-kaart:hover {
+      transform: translateY(-6px);
+      border-color: rgba(99,179,237,0.5);
+      background: rgba(255,255,255,0.08);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.4), 0 0 0 1px rgba(99,179,237,0.2);
     }
 
-    .card.matched .card-front {
-      background: linear-gradient(135deg, #1a4731, #0d2818);
-      border-color: #68d391;
-      box-shadow: 0 0 18px rgba(104,211,145,0.4), 0 4px 15px rgba(0,0,0,0.4);
-      animation: pulse-match 0.5s ease-out;
+    .spel-kaart:hover::before { opacity: 1; }
+
+    .kaart-emoji {
+      font-size: 3rem;
+      display: block;
+      margin-bottom: 4px;
+      filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));
     }
 
-    .card:not(.flipped):not(.matched):hover .card-inner {
-      transform: rotateY(8deg) scale(1.04);
+    .kaart-naam {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: #fff;
     }
 
-    @keyframes pulse-match {
-      0%   { transform: rotateY(180deg) scale(1); }
-      40%  { transform: rotateY(180deg) scale(1.12); }
-      100% { transform: rotateY(180deg) scale(1); }
+    .kaart-beschrijving {
+      font-size: 0.83rem;
+      color: #90cdf4;
+      line-height: 1.5;
+      margin-bottom: 8px;
     }
 
-    @keyframes shake {
-      0%, 100% { transform: rotateY(180deg) translateX(0); }
-      20%       { transform: rotateY(180deg) translateX(-5px); }
-      60%       { transform: rotateY(180deg) translateX(5px); }
+    .kaart-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 12px;
+      border-radius: 50px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      background: rgba(66,153,225,0.2);
+      border: 1px solid rgba(99,179,237,0.3);
+      color: #90cdf4;
+      margin-top: 4px;
     }
 
-    .card.no-match .card-front {
-      animation: shake 0.4s ease-in-out;
-      border-color: #fc8181;
-      box-shadow: 0 0 14px rgba(252,129,129,0.4);
-    }
-
-    .btn {
-      margin-top: 22px;
-      padding: 11px 30px;
-      border: none;
+    .spelen-pijl {
+      margin-top: 14px;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 10px 22px;
       border-radius: 50px;
       background: linear-gradient(135deg, #4299e1, #3182ce);
       color: #fff;
-      font-size: 0.95rem;
+      font-size: 0.88rem;
       font-weight: 600;
-      letter-spacing: 0.5px;
-      cursor: pointer;
-      box-shadow: 0 4px 15px rgba(66,153,225,0.4);
-      transition: transform 0.15s, box-shadow 0.15s;
+      box-shadow: 0 4px 12px rgba(66,153,225,0.35);
+      transition: box-shadow 0.2s;
     }
 
-    .btn:hover  { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(66,153,225,0.5); }
-    .btn:active { transform: translateY(0);    box-shadow: 0 2px 8px  rgba(66,153,225,0.3); }
-
-    /* Win overlay */
-    .overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.75);
-      backdrop-filter: blur(4px);
-      align-items: center;
-      justify-content: center;
-      z-index: 100;
-    }
-
-    .overlay.show { display: flex; }
-
-    .win-box {
-      background: linear-gradient(135deg, #1a365d, #2a4a7f);
-      border: 2px solid rgba(99,179,237,0.4);
-      border-radius: 24px;
-      padding: 40px 48px;
-      text-align: center;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.6);
-      animation: pop-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-    }
-
-    @keyframes pop-in {
-      from { transform: scale(0.5); opacity: 0; }
-      to   { transform: scale(1);   opacity: 1; }
-    }
-
-    .win-emoji  { font-size: 3.5rem; display: block; margin-bottom: 12px; }
-    .win-title  { color: #fff; font-size: 2rem; font-weight: 800; margin-bottom: 8px; }
-    .win-detail { color: #90cdf4; font-size: 1rem; margin-bottom: 24px; }
-
-    .stars {
-      font-size: 2rem;
-      margin-bottom: 16px;
-      letter-spacing: 4px;
-    }
-
-    @media (max-width: 420px) {
-      .grid { gap: 10px; }
-      .stats { gap: 14px; }
+    .spel-kaart:hover .spelen-pijl {
+      box-shadow: 0 6px 18px rgba(66,153,225,0.5);
     }
   </style>
 </head>
 <body>
 
-  <h1>Memory Match</h1>
-  <p class="subtitle">Vind alle 6 paren!</p>
-
-  <div class="stats">
-    <div class="stat">
-      <div class="stat-label">Zetten</div>
-      <div class="stat-value" id="moves">0</div>
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-logo">🎮 <span>Spelletjes</span></a>
+      <a href="geheugen-spel.html" class="nav-tab">Geheugen spel</a>
+      <a href="vier-op-rij.html" class="nav-tab">Vier op een rij</a>
+      <a href="rots-papier-schaar.html" class="nav-tab">Rots-Papier-Schaar</a>
     </div>
-    <div class="stat">
-      <div class="stat-label">Paren</div>
-      <div class="stat-value" id="pairs">0 / 6</div>
+  </nav>
+
+  <div class="pagina">
+    <div class="hero">
+      <span class="hero-emoji">🎮</span>
+      <h1>Spelletjes</h1>
+      <p>Drie gratis spelletjes om direct te spelen.<br>Kies een spel en begin!</p>
+    </div>
+
+    <div class="spellen-grid">
+
+      <a href="geheugen-spel.html" class="spel-kaart">
+        <span class="kaart-emoji">🃏</span>
+        <div class="kaart-naam">Geheugen spel</div>
+        <div class="kaart-beschrijving">Draai kaarten om en vind alle 6 overeenkomende paren. Test je geheugen!</div>
+        <span class="kaart-badge">🧠 Geheugen</span>
+        <span class="spelen-pijl">Spelen →</span>
+      </a>
+
+      <a href="vier-op-rij.html" class="spel-kaart">
+        <span class="kaart-emoji">🔴</span>
+        <div class="kaart-naam">Vier op een rij</div>
+        <div class="kaart-beschrijving">Leg vier schijven op een rij. Speel tegen een AI met drie moeilijkheidsgraden.</div>
+        <span class="kaart-badge">🤖 Speler vs AI</span>
+        <span class="spelen-pijl">Spelen →</span>
+      </a>
+
+      <a href="rots-papier-schaar.html" class="spel-kaart">
+        <span class="kaart-emoji">✊</span>
+        <div class="kaart-naam">Rots-Papier-Schaar</div>
+        <div class="kaart-beschrijving">Het klassieke handspel. Kies je wapen en versla de computer in een reeks rondes.</div>
+        <span class="kaart-badge">⚡ Snel spel</span>
+        <span class="spelen-pijl">Spelen →</span>
+      </a>
+
     </div>
   </div>
 
-  <div class="grid" id="grid"></div>
-  <button class="btn" id="restart">Opnieuw spelen</button>
-
-  <div class="overlay" id="overlay">
-    <div class="win-box">
-      <span class="win-emoji">🏆</span>
-      <div class="stars" id="stars"></div>
-      <div class="win-title">Gewonnen!</div>
-      <div class="win-detail" id="win-detail"></div>
-      <button class="btn" id="play-again">Nog een keer!</button>
-    </div>
-  </div>
-
-  <script>
-    const EMOJIS = ['🦊','🐬','🦋','🌵','🍕','🎸','🚀','🌈','🦄','🍩','🎯','🔥'];
-    // Pick 6 random emojis each game for variety
-    function pickEmojis() {
-      const shuffled = [...EMOJIS].sort(() => Math.random() - 0.5);
-      return shuffled.slice(0, 6);
-    }
-
-    let cards = [], flipped = [], matched = 0, moves = 0, locked = false;
-
-    function shuffle(arr) {
-      for (let i = arr.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [arr[i], arr[j]] = [arr[j], arr[i]];
-      }
-      return arr;
-    }
-
-    function starRating(moves) {
-      if (moves <= 10) return '⭐⭐⭐';
-      if (moves <= 16) return '⭐⭐';
-      return '⭐';
-    }
-
-    function buildGrid() {
-      const grid = document.getElementById('grid');
-      grid.innerHTML = '';
-      cards = [];
-      flipped = [];
-      matched = 0;
-      moves = 0;
-      locked = false;
-      document.getElementById('moves').textContent = '0';
-      document.getElementById('pairs').textContent = '0 / 6';
-
-      const chosen = pickEmojis();
-      const deck = shuffle([...chosen, ...chosen]);
-
-      deck.forEach((emoji, i) => {
-        const card = document.createElement('div');
-        card.className = 'card';
-        card.dataset.emoji = emoji;
-        card.dataset.index = i;
-        card.innerHTML = `
-          <div class="card-inner">
-            <div class="card-back">✦</div>
-            <div class="card-front">${emoji}</div>
-          </div>`;
-        card.addEventListener('click', onCardClick);
-        grid.appendChild(card);
-        cards.push(card);
-      });
-    }
-
-    function onCardClick(e) {
-      const card = e.currentTarget;
-      if (locked || card.classList.contains('flipped') || card.classList.contains('matched')) return;
-      card.classList.add('flipped');
-      flipped.push(card);
-      if (flipped.length === 2) checkMatch();
-    }
-
-    function checkMatch() {
-      locked = true;
-      moves++;
-      document.getElementById('moves').textContent = moves;
-
-      const [a, b] = flipped;
-      if (a.dataset.emoji === b.dataset.emoji) {
-        // Match!
-        setTimeout(() => {
-          a.classList.add('matched');
-          b.classList.add('matched');
-          a.classList.remove('flipped');
-          b.classList.remove('flipped');
-          matched++;
-          document.getElementById('pairs').textContent = `${matched} / 6`;
-          flipped = [];
-          locked = false;
-          if (matched === 6) showWin();
-        }, 300);
-      } else {
-        // No match
-        a.classList.add('no-match');
-        b.classList.add('no-match');
-        setTimeout(() => {
-          a.classList.remove('flipped', 'no-match');
-          b.classList.remove('flipped', 'no-match');
-          flipped = [];
-          locked = false;
-        }, 1000);
-      }
-    }
-
-    function showWin() {
-      const overlay = document.getElementById('overlay');
-      const detail  = document.getElementById('win-detail');
-      const stars   = document.getElementById('stars');
-      stars.textContent  = starRating(moves);
-      detail.textContent = `Klaar in ${moves} zetten!`;
-      overlay.classList.add('show');
-    }
-
-    document.getElementById('restart').addEventListener('click', buildGrid);
-    document.getElementById('play-again').addEventListener('click', () => {
-      document.getElementById('overlay').classList.remove('show');
-      buildGrid();
-    });
-
-    buildGrid();
-  </script>
 </body>
 </html>

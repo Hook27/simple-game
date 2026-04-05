@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Geheugen spel</title>
+  <link rel="stylesheet" href="stijl.css">
+  <style>
+    .kaarten-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      max-width: 360px;
+      width: 100%;
+      margin-bottom: 14px;
+    }
+
+    .kaart {
+      aspect-ratio: 1;
+      cursor: pointer;
+      perspective: 700px;
+    }
+
+    .kaart-binnen {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      transition: transform 0.42s cubic-bezier(0.4, 0, 0.2, 1);
+      transform-style: preserve-3d;
+      border-radius: 14px;
+    }
+
+    .kaart.omgedraaid .kaart-binnen,
+    .kaart.gevonden   .kaart-binnen {
+      transform: rotateY(180deg);
+    }
+
+    .kaart-achterkant,
+    .kaart-voorkant {
+      position: absolute;
+      inset: 0;
+      border-radius: 14px;
+      backface-visibility: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: clamp(1.6rem, 5vw, 2.2rem);
+      user-select: none;
+    }
+
+    .kaart-achterkant {
+      background: linear-gradient(145deg, #2d3748, #1a202c);
+      border: 2px solid rgba(99,179,237,0.25);
+      color: rgba(99,179,237,0.4);
+      font-size: 1.3rem;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
+    }
+
+    .kaart-achterkant::after {
+      content: '';
+      position: absolute;
+      inset: 7px;
+      border-radius: 8px;
+      border: 1px dashed rgba(99,179,237,0.18);
+    }
+
+    .kaart-voorkant {
+      background: linear-gradient(145deg, #2b4162, #12100e);
+      border: 2px solid rgba(99,179,237,0.45);
+      transform: rotateY(180deg);
+      box-shadow: 0 4px 14px rgba(0,0,0,0.45);
+    }
+
+    .kaart.gevonden .kaart-voorkant {
+      background: linear-gradient(145deg, #1a4731, #0d2818);
+      border-color: #68d391;
+      box-shadow: 0 0 20px rgba(104,211,145,0.38), 0 4px 14px rgba(0,0,0,0.4);
+      animation: kaart-gevonden-pulse 0.5s ease-out;
+    }
+
+    .kaart:not(.omgedraaid):not(.gevonden):hover .kaart-binnen {
+      transform: rotateY(10deg) scale(1.05);
+    }
+
+    .kaart.geen-match .kaart-voorkant {
+      animation: schudden 0.4s ease-in-out;
+      border-color: #fc8181;
+      box-shadow: 0 0 16px rgba(252,129,129,0.4);
+    }
+
+    @keyframes kaart-gevonden-pulse {
+      0%   { transform: rotateY(180deg) scale(1); }
+      40%  { transform: rotateY(180deg) scale(1.13); }
+      100% { transform: rotateY(180deg) scale(1); }
+    }
+
+    @keyframes schudden {
+      0%, 100% { transform: rotateY(180deg) translateX(0); }
+      25%       { transform: rotateY(180deg) translateX(-6px); }
+      75%       { transform: rotateY(180deg) translateX(6px); }
+    }
+
+    .sterren { font-size: 2rem; letter-spacing: 6px; margin-bottom: 14px; }
+  </style>
+</head>
+<body>
+
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-logo">🎮 <span>Spelletjes</span></a>
+      <a href="geheugen-spel.html" class="nav-tab actief">Geheugen spel</a>
+      <a href="vier-op-rij.html" class="nav-tab">Vier op een rij</a>
+      <a href="rots-papier-schaar.html" class="nav-tab">Rots-Papier-Schaar</a>
+    </div>
+  </nav>
+
+  <div class="pagina">
+    <h1 class="spel-titel">Geheugen spel</h1>
+    <p class="spel-subtitel">Vind alle 6 overeenkomende paren!</p>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-label">Zetten</div>
+        <div class="stat-value" id="zetten">0</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Gevonden</div>
+        <div class="stat-value" id="paren">0 / 6</div>
+      </div>
+    </div>
+
+    <div class="kaarten-grid" id="kaarten-grid"></div>
+    <button class="knop" id="opnieuw">Opnieuw spelen</button>
+  </div>
+
+  <!-- Win popup -->
+  <div class="overlay" id="overlay">
+    <div class="popup">
+      <span class="popup-emoji">🏆</span>
+      <div class="sterren" id="sterren"></div>
+      <div class="popup-titel">Gewonnen!</div>
+      <div class="popup-tekst" id="win-tekst"></div>
+      <button class="knop" id="nog-een-keer">Nog een keer!</button>
+    </div>
+  </div>
+
+  <script>
+    const ALLE_EMOJI = ['🦊','🐬','🦋','🌵','🍕','🎸','🚀','🌈','🦄','🍩','🎯','🔥','🐸','🦁','🎃','🍓'];
+
+    let omgedraaid = [], gevonden = 0, zetten = 0, geblokkeerd = false;
+
+    function shuffle(arr) {
+      const a = [...arr];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+    function sterrenScore(z) {
+      if (z <= 10) return '⭐⭐⭐';
+      if (z <= 16) return '⭐⭐';
+      return '⭐';
+    }
+
+    function bouwSpel() {
+      const grid = document.getElementById('kaarten-grid');
+      grid.innerHTML = '';
+      omgedraaid = [];
+      gevonden = 0;
+      zetten = 0;
+      geblokkeerd = false;
+      document.getElementById('zetten').textContent = '0';
+      document.getElementById('paren').textContent = '0 / 6';
+
+      const zes = shuffle(ALLE_EMOJI).slice(0, 6);
+      const dek = shuffle([...zes, ...zes]);
+
+      dek.forEach((emoji) => {
+        const kaart = document.createElement('div');
+        kaart.className = 'kaart';
+        kaart.dataset.emoji = emoji;
+        kaart.innerHTML = `
+          <div class="kaart-binnen">
+            <div class="kaart-achterkant">✦</div>
+            <div class="kaart-voorkant">${emoji}</div>
+          </div>`;
+        kaart.addEventListener('click', onKaartKlik);
+        grid.appendChild(kaart);
+      });
+    }
+
+    function onKaartKlik(e) {
+      const kaart = e.currentTarget;
+      if (geblokkeerd || kaart.classList.contains('omgedraaid') || kaart.classList.contains('gevonden')) return;
+      kaart.classList.add('omgedraaid');
+      omgedraaid.push(kaart);
+      if (omgedraaid.length === 2) controleerMatch();
+    }
+
+    function controleerMatch() {
+      geblokkeerd = true;
+      zetten++;
+      document.getElementById('zetten').textContent = zetten;
+
+      const [a, b] = omgedraaid;
+      if (a.dataset.emoji === b.dataset.emoji) {
+        setTimeout(() => {
+          a.classList.add('gevonden');
+          b.classList.add('gevonden');
+          a.classList.remove('omgedraaid');
+          b.classList.remove('omgedraaid');
+          gevonden++;
+          document.getElementById('paren').textContent = `${gevonden} / 6`;
+          omgedraaid = [];
+          geblokkeerd = false;
+          if (gevonden === 6) toonWin();
+        }, 280);
+      } else {
+        a.classList.add('geen-match');
+        b.classList.add('geen-match');
+        setTimeout(() => {
+          a.classList.remove('omgedraaid', 'geen-match');
+          b.classList.remove('omgedraaid', 'geen-match');
+          omgedraaid = [];
+          geblokkeerd = false;
+        }, 1050);
+      }
+    }
+
+    function toonWin() {
+      document.getElementById('sterren').textContent = sterrenScore(zetten);
+      document.getElementById('win-tekst').textContent = `Klaar in ${zetten} zetten!`;
+      document.getElementById('overlay').classList.add('toon');
+    }
+
+    document.getElementById('opnieuw').addEventListener('click', bouwSpel);
+    document.getElementById('nog-een-keer').addEventListener('click', () => {
+      document.getElementById('overlay').classList.remove('toon');
+      bouwSpel();
+    });
+
+    bouwSpel();
+  </script>
+</body>
+</html>

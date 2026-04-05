@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vier op een rij</title>
+  <link rel="stylesheet" href="stijl.css">
+  <style>
+    .spel-omgeving {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      width: 100%;
+    }
+
+    .legenda {
+      display: flex;
+      gap: 16px;
+      font-size: 0.78rem;
+      color: #90cdf4;
+    }
+
+    .legenda-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .schijf-bol {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+    }
+
+    .schijf-bol.speler { background: radial-gradient(circle at 35% 35%, #fcd34d, #d97706); box-shadow: 0 0 6px rgba(217,119,6,0.6); }
+    .schijf-bol.ai     { background: radial-gradient(circle at 35% 35%, #f87171, #dc2626); box-shadow: 0 0 6px rgba(220,38,38,0.6); }
+
+    .status-balk {
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.83rem;
+      font-weight: 600;
+      color: #e2e8f0;
+      transition: color 0.3s;
+    }
+
+    .status-balk.ai-denkt { color: #fc8181; }
+    .status-balk.gewonnen { color: #68d391; }
+
+    /* ── Bord wrapper ──── */
+    .bord-wrapper {
+      position: relative;
+    }
+
+    /* Drop-zone balk bovenaan */
+    .drop-rij {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+      margin-bottom: 3px;
+      padding: 0 3px;
+    }
+
+    .drop-knop {
+      aspect-ratio: 1;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      color: transparent;
+      border-radius: 50%;
+      transition: color 0.15s, background 0.15s;
+      line-height: 1;
+    }
+
+    .drop-knop:hover  { color: #fcd34d; background: rgba(252,211,77,0.1); }
+    .drop-knop:disabled { cursor: not-allowed; }
+    .drop-knop:disabled:hover { color: transparent; background: transparent; }
+
+    /* Bord */
+    .bord {
+      background: linear-gradient(145deg, #1e3a5f, #152a4a);
+      border: 2px solid rgba(99,179,237,0.3);
+      border-radius: 12px;
+      padding: 5px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06);
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      grid-template-rows: repeat(6, 1fr);
+      gap: 4px;
+    }
+
+    .cel {
+      width:  clamp(30px, 6.2vw, 44px);
+      height: clamp(30px, 6.2vw, 44px);
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.45);
+      box-shadow: inset 0 3px 8px rgba(0,0,0,0.55);
+      transition: background 0.18s, box-shadow 0.18s;
+      position: relative;
+    }
+
+    .cel.speler {
+      background: radial-gradient(circle at 35% 35%, #fcd34d 0%, #f59e0b 45%, #d97706 100%);
+      box-shadow: inset 0 -3px 6px rgba(0,0,0,0.3), 0 0 10px rgba(245,158,11,0.45);
+    }
+
+    .cel.ai {
+      background: radial-gradient(circle at 35% 35%, #f87171 0%, #ef4444 45%, #dc2626 100%);
+      box-shadow: inset 0 -3px 6px rgba(0,0,0,0.3), 0 0 10px rgba(239,68,68,0.45);
+    }
+
+    .cel.win-cel {
+      animation: win-pulse 0.7s ease-in-out infinite alternate;
+    }
+
+    .cel.val-animatie {
+      animation: val-in 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+    }
+
+    @keyframes val-in {
+      from { transform: scaleY(0.4) scaleX(1.1); opacity: 0.6; }
+      to   { transform: scaleY(1)   scaleX(1);   opacity: 1; }
+    }
+
+    @keyframes win-pulse {
+      from { box-shadow: inset 0 -3px 6px rgba(0,0,0,0.3), 0 0 10px rgba(255,255,255,0.3); filter: brightness(1); }
+      to   { box-shadow: inset 0 -3px 6px rgba(0,0,0,0.3), 0 0 20px rgba(255,255,255,0.7); filter: brightness(1.25); }
+    }
+
+    .knoppen-rij {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+  </style>
+</head>
+<body>
+
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-logo">🎮 <span>Spelletjes</span></a>
+      <a href="geheugen-spel.html" class="nav-tab">Geheugen spel</a>
+      <a href="vier-op-rij.html" class="nav-tab actief">Vier op een rij</a>
+      <a href="rots-papier-schaar.html" class="nav-tab">Rots-Papier-Schaar</a>
+    </div>
+  </nav>
+
+  <div class="pagina">
+    <h1 class="spel-titel">Vier op een rij</h1>
+    <p class="spel-subtitel">Leg vier schijven op een rij om te winnen!</p>
+
+    <div class="niveau-knoppen" id="niveau-knoppen">
+      <button class="niveau-knop" data-niveau="makkelijk">😊 Makkelijk</button>
+      <button class="niveau-knop actief" data-niveau="normaal">🧠 Normaal</button>
+      <button class="niveau-knop" data-niveau="moeilijk">💀 Moeilijk</button>
+    </div>
+
+    <div class="legenda">
+      <span class="legenda-item"><span class="schijf-bol speler"></span> Jij (geel)</span>
+      <span class="legenda-item"><span class="schijf-bol ai"></span> AI (rood)</span>
+    </div>
+
+    <div class="spel-omgeving">
+      <div class="status-balk" id="status">Jouw beurt</div>
+
+      <div class="bord-wrapper">
+        <div class="drop-rij" id="drop-rij"></div>
+        <div class="bord" id="bord"></div>
+      </div>
+
+      <div class="knoppen-rij">
+        <button class="knop" id="opnieuw">Opnieuw spelen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Einde popup -->
+  <div class="overlay" id="overlay">
+    <div class="popup">
+      <span class="popup-emoji" id="popup-emoji"></span>
+      <div class="popup-titel" id="popup-titel"></div>
+      <div class="popup-tekst" id="popup-tekst"></div>
+      <button class="knop" id="popup-opnieuw">Nog een keer!</button>
+    </div>
+  </div>
+
+  <script>
+    /* ────────────────────────────────────────────
+       Constanten
+    ──────────────────────────────────────────── */
+    const RIJEN   = 6;
+    const KOLOMMEN = 7;
+    const LEEG    = 0;
+    const SPELER  = 1;
+    const AI      = 2;
+    const COL_VOLGORDE = [3, 2, 4, 1, 5, 0, 6]; // Midden eerst voor betere pruning
+
+    /* ────────────────────────────────────────────
+       Spelstatus
+    ──────────────────────────────────────────── */
+    let bord, spelDone, spelerAanBeurt, niveau;
+    niveau = 'normaal';
+
+    /* ────────────────────────────────────────────
+       Hulpfuncties voor het bord
+    ──────────────────────────────────────────── */
+    function maakLeegBord() {
+      return Array.from({ length: RIJEN }, () => Array(KOLOMMEN).fill(LEEG));
+    }
+
+    function kopieerBord(b) {
+      return b.map(r => [...r]);
+    }
+
+    function laagsteVrijeRij(b, kolom) {
+      for (let r = RIJEN - 1; r >= 0; r--) {
+        if (b[r][kolom] === LEEG) return r;
+      }
+      return -1;
+    }
+
+    function isGeldigeKolom(b, kolom) {
+      return b[0][kolom] === LEEG;
+    }
+
+    function getGeldigeKolommen(b) {
+      return Array.from({ length: KOLOMMEN }, (_, i) => i).filter(c => isGeldigeKolom(b, c));
+    }
+
+    function plaatsSchijf(b, kolom, spel) {
+      const rij = laagsteVrijeRij(b, kolom);
+      if (rij === -1) return -1;
+      b[rij][kolom] = spel;
+      return rij;
+    }
+
+    /* ────────────────────────────────────────────
+       Win-detectie
+    ──────────────────────────────────────────── */
+    function controleerWin(b, spel) {
+      // Horizontaal
+      for (let r = 0; r < RIJEN; r++) {
+        for (let c = 0; c <= KOLOMMEN - 4; c++) {
+          if (b[r][c] === spel && b[r][c+1] === spel && b[r][c+2] === spel && b[r][c+3] === spel)
+            return [[r,c],[r,c+1],[r,c+2],[r,c+3]];
+        }
+      }
+      // Verticaal
+      for (let r = 0; r <= RIJEN - 4; r++) {
+        for (let c = 0; c < KOLOMMEN; c++) {
+          if (b[r][c] === spel && b[r+1][c] === spel && b[r+2][c] === spel && b[r+3][c] === spel)
+            return [[r,c],[r+1,c],[r+2,c],[r+3,c]];
+        }
+      }
+      // Diagonaal \
+      for (let r = 0; r <= RIJEN - 4; r++) {
+        for (let c = 0; c <= KOLOMMEN - 4; c++) {
+          if (b[r][c] === spel && b[r+1][c+1] === spel && b[r+2][c+2] === spel && b[r+3][c+3] === spel)
+            return [[r,c],[r+1,c+1],[r+2,c+2],[r+3,c+3]];
+        }
+      }
+      // Diagonaal /
+      for (let r = 3; r < RIJEN; r++) {
+        for (let c = 0; c <= KOLOMMEN - 4; c++) {
+          if (b[r][c] === spel && b[r-1][c+1] === spel && b[r-2][c+2] === spel && b[r-3][c+3] === spel)
+            return [[r,c],[r-1,c+1],[r-2,c+2],[r-3,c+3]];
+        }
+      }
+      return null;
+    }
+
+    function isBordVol(b) {
+      return b[0].every(c => c !== LEEG);
+    }
+
+    /* ────────────────────────────────────────────
+       AI – evaluatiefuncties
+    ──────────────────────────────────────────── */
+    function scoreRaam(raam, aiSpeler) {
+      const mensSpeler = aiSpeler === AI ? SPELER : AI;
+      let score = 0;
+      const aiTelling    = raam.filter(c => c === aiSpeler).length;
+      const leegTelling  = raam.filter(c => c === LEEG).length;
+      const mensTelling  = raam.filter(c => c === mensSpeler).length;
+
+      if      (aiTelling === 4)                    score += 100;
+      else if (aiTelling === 3 && leegTelling === 1) score += 5;
+      else if (aiTelling === 2 && leegTelling === 2) score += 2;
+      if      (mensTelling === 3 && leegTelling === 1) score -= 4;
+      return score;
+    }
+
+    function evalueerBord(b) {
+      let score = 0;
+      // Voorkeur voor middenkolom
+      for (let r = 0; r < RIJEN; r++) {
+        if (b[r][3] === AI) score += 3;
+      }
+      // Horizontale ramen
+      for (let r = 0; r < RIJEN; r++) {
+        for (let c = 0; c <= KOLOMMEN - 4; c++) {
+          score += scoreRaam([b[r][c], b[r][c+1], b[r][c+2], b[r][c+3]], AI);
+        }
+      }
+      // Verticale ramen
+      for (let r = 0; r <= RIJEN - 4; r++) {
+        for (let c = 0; c < KOLOMMEN; c++) {
+          score += scoreRaam([b[r][c], b[r+1][c], b[r+2][c], b[r+3][c]], AI);
+        }
+      }
+      // Diagonaal \
+      for (let r = 0; r <= RIJEN - 4; r++) {
+        for (let c = 0; c <= KOLOMMEN - 4; c++) {
+          score += scoreRaam([b[r][c], b[r+1][c+1], b[r+2][c+2], b[r+3][c+3]], AI);
+        }
+      }
+      // Diagonaal /
+      for (let r = 3; r < RIJEN; r++) {
+        for (let c = 0; c <= KOLOMMEN - 4; c++) {
+          score += scoreRaam([b[r][c], b[r-1][c+1], b[r-2][c+2], b[r-3][c+3]], AI);
+        }
+      }
+      return score;
+    }
+
+    /* ────────────────────────────────────────────
+       Minimax met alpha-beta pruning
+    ──────────────────────────────────────────── */
+    function minimax(b, diepte, alpha, beta, maximaliserend) {
+      if (controleerWin(b, AI))     return  10000 + diepte;
+      if (controleerWin(b, SPELER)) return -10000 - diepte;
+      const geldig = getGeldigeKolommen(b);
+      if (geldig.length === 0 || diepte === 0) return evalueerBord(b);
+
+      if (maximaliserend) {
+        let maxScore = -Infinity;
+        for (const k of COL_VOLGORDE.filter(c => geldig.includes(c))) {
+          const nb = kopieerBord(b);
+          plaatsSchijf(nb, k, AI);
+          maxScore = Math.max(maxScore, minimax(nb, diepte - 1, alpha, beta, false));
+          alpha = Math.max(alpha, maxScore);
+          if (alpha >= beta) break;
+        }
+        return maxScore;
+      } else {
+        let minScore = Infinity;
+        for (const k of COL_VOLGORDE.filter(c => geldig.includes(c))) {
+          const nb = kopieerBord(b);
+          plaatsSchijf(nb, k, SPELER);
+          minScore = Math.min(minScore, minimax(nb, diepte - 1, alpha, beta, true));
+          beta = Math.min(beta, minScore);
+          if (alpha >= beta) break;
+        }
+        return minScore;
+      }
+    }
+
+    function getBestMove(b, diepte) {
+      let beste = -1, besteScore = -Infinity;
+      for (const k of COL_VOLGORDE) {
+        if (!isGeldigeKolom(b, k)) continue;
+        const nb = kopieerBord(b);
+        plaatsSchijf(nb, k, AI);
+        const score = minimax(nb, diepte - 1, -Infinity, Infinity, false);
+        if (score > besteScore) { besteScore = score; beste = k; }
+      }
+      return beste;
+    }
+
+    /* ────────────────────────────────────────────
+       AI-zet op basis van niveau
+    ──────────────────────────────────────────── */
+    function aiZet(b) {
+      const geldig = getGeldigeKolommen(b);
+      if (geldig.length === 0) return -1;
+
+      if (niveau === 'makkelijk') {
+        // 30% kans op slim, anders willekeurig
+        if (Math.random() < 0.3) {
+          for (const k of geldig) {
+            const nb = kopieerBord(b); plaatsSchijf(nb, k, AI);
+            if (controleerWin(nb, AI)) return k;
+          }
+        }
+        return geldig[Math.floor(Math.random() * geldig.length)];
+      }
+
+      if (niveau === 'normaal') {
+        // Directe win pakken
+        for (const k of geldig) {
+          const nb = kopieerBord(b); plaatsSchijf(nb, k, AI);
+          if (controleerWin(nb, AI)) return k;
+        }
+        // Directe win blokkeren
+        for (const k of geldig) {
+          const nb = kopieerBord(b); plaatsSchijf(nb, k, SPELER);
+          if (controleerWin(nb, SPELER)) return k;
+        }
+        // Minimax met diepte 4
+        return getBestMove(b, 4);
+      }
+
+      // Moeilijk: minimax diepte 7
+      return getBestMove(b, 7);
+    }
+
+    /* ────────────────────────────────────────────
+       DOM rendering
+    ──────────────────────────────────────────── */
+    function renderBord() {
+      const bordEl = document.getElementById('bord');
+      bordEl.innerHTML = '';
+      for (let r = 0; r < RIJEN; r++) {
+        for (let c = 0; c < KOLOMMEN; c++) {
+          const cel = document.createElement('div');
+          cel.className = 'cel';
+          cel.id = `cel-${r}-${c}`;
+          if (bord[r][c] === SPELER) cel.classList.add('speler');
+          else if (bord[r][c] === AI)  cel.classList.add('ai');
+          bordEl.appendChild(cel);
+        }
+      }
+    }
+
+    function renderDropRij(enabled) {
+      const rij = document.getElementById('drop-rij');
+      rij.innerHTML = '';
+      for (let c = 0; c < KOLOMMEN; c++) {
+        const knop = document.createElement('button');
+        knop.className = 'drop-knop';
+        knop.textContent = '▼';
+        knop.disabled = !enabled || !isGeldigeKolom(bord, c) || spelDone;
+        knop.addEventListener('click', () => spelerZet(c));
+        rij.appendChild(knop);
+      }
+    }
+
+    function updateDropRij(enabled) {
+      const knoppen = document.querySelectorAll('.drop-knop');
+      knoppen.forEach((k, i) => {
+        k.disabled = !enabled || !isGeldigeKolom(bord, i) || spelDone;
+      });
+    }
+
+    function setCelAnimatie(rij, kolom, cls) {
+      const cel = document.getElementById(`cel-${rij}-${kolom}`);
+      if (!cel) return;
+      cel.classList.add(cls, 'val-animatie');
+    }
+
+    function zetStatus(tekst, extraClass = '') {
+      const el = document.getElementById('status');
+      el.textContent = tekst;
+      el.className = 'status-balk ' + extraClass;
+    }
+
+    /* ────────────────────────────────────────────
+       Spellogica
+    ──────────────────────────────────────────── */
+    function spelerZet(kolom) {
+      if (spelDone || !spelerAanBeurt) return;
+      if (!isGeldigeKolom(bord, kolom)) return;
+
+      const rij = plaatsSchijf(bord, kolom, SPELER);
+      setCelAnimatie(rij, kolom, 'speler');
+      updateDropRij(false);
+
+      const win = controleerWin(bord, SPELER);
+      if (win) { return verwerkEinde(SPELER, win); }
+      if (isBordVol(bord)) { return verwerkEinde(LEEG); }
+
+      spelerAanBeurt = false;
+      zetStatus('AI denkt...', 'ai-denkt');
+
+      setTimeout(() => {
+        const aiKolom = aiZet(bord);
+        if (aiKolom === -1) { return verwerkEinde(LEEG); }
+        const aiRij = plaatsSchijf(bord, aiKolom, AI);
+        setCelAnimatie(aiRij, aiKolom, 'ai');
+
+        const aiWin = controleerWin(bord, AI);
+        if (aiWin) { return verwerkEinde(AI, aiWin); }
+        if (isBordVol(bord)) { return verwerkEinde(LEEG); }
+
+        spelerAanBeurt = true;
+        zetStatus('Jouw beurt');
+        updateDropRij(true);
+      }, niveau === 'moeilijk' ? 450 : 300);
+    }
+
+    function verwerkEinde(winnaar, winCellen = null) {
+      spelDone = true;
+      updateDropRij(false);
+
+      if (winCellen) {
+        winCellen.forEach(([r, c]) => {
+          document.getElementById(`cel-${r}-${c}`)?.classList.add('win-cel');
+        });
+      }
+
+      setTimeout(() => {
+        const emoji = winnaar === SPELER ? '🏆' : winnaar === AI ? '🤖' : '🤝';
+        const titel = winnaar === SPELER ? 'Gewonnen!' : winnaar === AI ? 'Verloren!' : 'Gelijkspel!';
+        const tekst = winnaar === SPELER ? 'Gefeliciteerd, jij hebt vier op een rij!' :
+                      winnaar === AI     ? 'De AI had vier op een rij. Probeer het opnieuw!' :
+                                          'Het bord is vol, geen winnaar.';
+        document.getElementById('popup-emoji').textContent = emoji;
+        document.getElementById('popup-titel').textContent = titel;
+        document.getElementById('popup-tekst').textContent = tekst;
+        document.getElementById('overlay').classList.add('toon');
+        if (winnaar === SPELER) zetStatus('Gewonnen! 🎉', 'gewonnen');
+        else if (winnaar === AI) zetStatus('Verloren...', 'ai-denkt');
+        else zetStatus('Gelijkspel!');
+      }, 600);
+    }
+
+    function nieuwSpel() {
+      bord = maakLeegBord();
+      spelDone = false;
+      spelerAanBeurt = true;
+      zetStatus('Jouw beurt');
+      renderBord();
+      renderDropRij(true);
+      document.getElementById('overlay').classList.remove('toon');
+    }
+
+    /* ────────────────────────────────────────────
+       Niveau-knoppen
+    ──────────────────────────────────────────── */
+    document.getElementById('niveau-knoppen').addEventListener('click', (e) => {
+      const knop = e.target.closest('.niveau-knop');
+      if (!knop) return;
+      document.querySelectorAll('.niveau-knop').forEach(k => k.classList.remove('actief'));
+      knop.classList.add('actief');
+      niveau = knop.dataset.niveau;
+      nieuwSpel();
+    });
+
+    document.getElementById('opnieuw').addEventListener('click', nieuwSpel);
+    document.getElementById('popup-opnieuw').addEventListener('click', nieuwSpel);
+
+    nieuwSpel();
+  </script>
+</body>
+</html>
