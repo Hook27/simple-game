@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Boter-kaas-en-eieren</title>
+  <link rel="icon" href="icons/boter-kaas-en-eieren.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="stijl.css">
+  <script src="nav.js" defer></script>
+  <style>
+    .status-balk {
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: #e2e8f0;
+      margin-bottom: 10px;
+    }
+    .status-balk.ai-denkt { color: #fc8181; }
+    .status-balk.gewonnen { color: #68d391; }
+
+    .bord {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      width: min(330px, 88vw);
+      aspect-ratio: 1;
+      padding: 8px;
+      margin-bottom: 14px;
+      background: linear-gradient(145deg, #1e3a5f, #152a4a);
+      border: 2px solid rgba(99,179,237,0.3);
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06);
+    }
+
+    .vak {
+      border: none;
+      border-radius: 12px;
+      background: rgba(0,0,0,0.35);
+      box-shadow: inset 0 3px 8px rgba(0,0,0,0.5);
+      font-size: clamp(2.4rem, 13vw, 3.6rem);
+      font-weight: 900;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.15s;
+      color: transparent;
+      font-family: inherit;
+    }
+    .vak:disabled { cursor: default; }
+    .vak:not(:disabled):hover { background: rgba(252,211,77,0.1); }
+
+    .vak.x { color: #fcd34d; text-shadow: 0 0 14px rgba(245,158,11,0.55); }
+    .vak.o { color: #f87171; text-shadow: 0 0 14px rgba(239,68,68,0.55); }
+    .vak.x, .vak.o { animation: zet-in 0.22s cubic-bezier(0.34,1.56,0.64,1) both; }
+    /* na .x/.o, zodat de win-animatie voorrang krijgt */
+    .vak.win { animation: win-pulse 0.7s ease-in-out infinite alternate; background: rgba(255,255,255,0.08); }
+
+    @keyframes zet-in {
+      from { transform: scale(0.4); opacity: 0; }
+      to   { transform: scale(1);   opacity: 1; }
+    }
+    @keyframes win-pulse {
+      from { filter: brightness(1);    transform: scale(1); }
+      to   { filter: brightness(1.35); transform: scale(1.06); }
+    }
+
+    .legenda {
+      display: flex;
+      gap: 18px;
+      font-size: 0.8rem;
+      color: #90cdf4;
+      margin-bottom: 8px;
+    }
+    .legenda b.x { color: #fcd34d; }
+    .legenda b.o { color: #f87171; }
+  </style>
+</head>
+<body>
+
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-logo">🎮 <span>Spelletjes</span></a>
+      <a href="geheugen-spel.html" class="nav-tab">Geheugen spel</a>
+      <a href="vier-op-rij.html" class="nav-tab">Vier op een rij</a>
+      <a href="rots-papier-schaar.html" class="nav-tab">Rots-Papier-Schaar</a>
+      <a href="pixel-breakout.html" class="nav-tab">Pixel Breakout</a>
+      <a href="boter-kaas-en-eieren.html" class="nav-tab actief">Boter-kaas-en-eieren</a>
+      <a href="galgje.html" class="nav-tab">Galgje</a>
+      <a href="slang.html" class="nav-tab">Slang</a>
+      <a href="mijnenveger.html" class="nav-tab">Mijnenveger</a>
+    </div>
+  </nav>
+
+  <div class="pagina">
+    <h1 class="spel-titel">Boter-kaas-en-eieren</h1>
+    <p class="spel-subtitel">Drie op een rij wint! Om de beurt begint iemand anders.</p>
+
+    <div class="niveau-knoppen" id="niveau-knoppen">
+      <button class="niveau-knop" data-niveau="makkelijk">😊 Makkelijk</button>
+      <button class="niveau-knop actief" data-niveau="normaal">🧠 Normaal</button>
+      <button class="niveau-knop" data-niveau="moeilijk">💀 Moeilijk</button>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="stat-label">Jij</div><div class="stat-value" id="score-jij">0</div></div>
+      <div class="stat"><div class="stat-label">Gelijk</div><div class="stat-value" id="score-gelijk">0</div></div>
+      <div class="stat"><div class="stat-label">AI</div><div class="stat-value" id="score-ai">0</div></div>
+    </div>
+
+    <div class="legenda">
+      <span>Jij = <b class="x">✕</b></span>
+      <span>AI = <b class="o">◯</b></span>
+    </div>
+
+    <div class="status-balk" id="status">Jouw beurt</div>
+    <div class="bord" id="bord"></div>
+    <button class="knop" id="opnieuw">Opnieuw spelen</button>
+  </div>
+
+  <div class="overlay" id="overlay">
+    <div class="popup">
+      <span class="popup-emoji" id="popup-emoji"></span>
+      <div class="popup-titel" id="popup-titel"></div>
+      <div class="popup-tekst" id="popup-tekst"></div>
+      <button class="knop" id="popup-opnieuw">Nog een keer!</button>
+    </div>
+  </div>
+
+  <script>
+    const LEEG = '', JIJ = 'x', AI = 'o';
+    const LIJNEN = [
+      [0,1,2],[3,4,5],[6,7,8],   // rijen
+      [0,3,6],[1,4,7],[2,5,8],   // kolommen
+      [0,4,8],[2,4,6],           // diagonalen
+    ];
+    const TEKEN = { x: '✕', o: '◯' };
+
+    let bord, klaar, jijAanBeurt, niveau = 'normaal';
+    let jijBegint = true;          // wisselt na elk potje
+    let spelId = 0;                // oude timers doen niets meer na een nieuw spel
+    const score = { jij: 0, gelijk: 0, ai: 0 };
+
+    /* ── Spelregels ─────────────────────── */
+    function winnaar(b) {
+      for (const l of LIJNEN) {
+        if (b[l[0]] && b[l[0]] === b[l[1]] && b[l[1]] === b[l[2]]) return { wie: b[l[0]], lijn: l };
+      }
+      return null;
+    }
+    const vrijeVakken = b => b.map((v, i) => v ? -1 : i).filter(i => i >= 0);
+
+    /* ── AI ─────────────────────────────── */
+    // minimax: +10 als de AI wint, -10 als jij wint; sneller winnen telt zwaarder
+    function minimax(b, aiAanZet, diepte) {
+      const w = winnaar(b);
+      if (w) return w.wie === AI ? 10 - diepte : diepte - 10;
+      const vrij = vrijeVakken(b);
+      if (!vrij.length) return 0;
+      let beste = aiAanZet ? -Infinity : Infinity;
+      for (const i of vrij) {
+        b[i] = aiAanZet ? AI : JIJ;
+        const s = minimax(b, !aiAanZet, diepte + 1);
+        b[i] = LEEG;
+        beste = aiAanZet ? Math.max(beste, s) : Math.min(beste, s);
+      }
+      return beste;
+    }
+
+    function besteZet(b) {
+      let beste = -Infinity, kandidaten = [];
+      for (const i of vrijeVakken(b)) {
+        b[i] = AI;
+        const s = minimax(b, false, 1);
+        b[i] = LEEG;
+        if (s > beste) { beste = s; kandidaten = [i]; }
+        else if (s === beste) kandidaten.push(i);
+      }
+      // bij gelijke zetten willekeurig kiezen, zodat elk potje anders loopt
+      return kandidaten[Math.floor(Math.random() * kandidaten.length)];
+    }
+
+    function winnendeZet(b, wie) {
+      for (const i of vrijeVakken(b)) {
+        b[i] = wie;
+        const w = winnaar(b);
+        b[i] = LEEG;
+        if (w) return i;
+      }
+      return -1;
+    }
+
+    function willekeurig(b) {
+      const vrij = vrijeVakken(b);
+      return vrij[Math.floor(Math.random() * vrij.length)];
+    }
+
+    function aiKeuze(b) {
+      if (niveau === 'moeilijk') return besteZet(b);   // onverslaanbaar: hooguit gelijkspel
+      if (niveau === 'normaal') {
+        // winnen of blokkeren, en verder meestal slim, soms een foutje
+        let z = winnendeZet(b, AI);
+        if (z >= 0) return z;
+        z = winnendeZet(b, JIJ);
+        if (z >= 0) return z;
+        return Math.random() < 0.7 ? besteZet(b) : willekeurig(b);
+      }
+      // makkelijk: pakt alleen soms een kans
+      const z = winnendeZet(b, AI);
+      if (z >= 0 && Math.random() < 0.5) return z;
+      return willekeurig(b);
+    }
+
+    /* ── Weergave ───────────────────────── */
+    const bordEl = document.getElementById('bord');
+    const vakken = [];
+    for (let i = 0; i < 9; i++) {
+      const v = document.createElement('button');
+      v.className = 'vak';
+      v.setAttribute('aria-label', `Vak ${i + 1}`);
+      v.addEventListener('click', () => jijZet(i));
+      bordEl.appendChild(v);
+      vakken.push(v);
+    }
+
+    function teken() {
+      bord.forEach((w, i) => {
+        const v = vakken[i];
+        const klasse = 'vak' + (w ? ' ' + w : '');
+        if (v.className.replace(' win', '') !== klasse) v.className = klasse;
+        v.textContent = w ? TEKEN[w] : '';
+        v.disabled = klaar || !jijAanBeurt || !!w;
+      });
+    }
+
+    function zetStatus(tekst, extra = '') {
+      const el = document.getElementById('status');
+      el.textContent = tekst;
+      el.className = 'status-balk ' + extra;
+    }
+
+    function zetScores() {
+      document.getElementById('score-jij').textContent = score.jij;
+      document.getElementById('score-gelijk').textContent = score.gelijk;
+      document.getElementById('score-ai').textContent = score.ai;
+    }
+
+    /* ── Spelverloop ────────────────────── */
+    function jijZet(i) {
+      if (klaar || !jijAanBeurt || bord[i]) return;
+      bord[i] = JIJ;
+      jijAanBeurt = false;
+      teken();
+      if (controleerEinde()) return;
+      aiBeurt();
+    }
+
+    function aiBeurt() {
+      zetStatus('AI denkt...', 'ai-denkt');
+      const id = spelId;
+      setTimeout(() => {
+        if (id !== spelId) return;
+        bord[aiKeuze(bord)] = AI;
+        jijAanBeurt = true;
+        teken();
+        if (!controleerEinde()) zetStatus('Jouw beurt');
+      }, 450);
+    }
+
+    function controleerEinde() {
+      const w = winnaar(bord);
+      const vol = !vrijeVakken(bord).length;
+      if (!w && !vol) return false;
+
+      klaar = true;
+      teken();
+      let uitslag;
+      if (w) {
+        w.lijn.forEach(i => vakken[i].classList.add('win'));
+        uitslag = w.wie === JIJ ? 'jij' : 'ai';
+      } else uitslag = 'gelijk';
+      score[uitslag]++;
+      zetScores();
+
+      zetStatus(
+        uitslag === 'jij' ? 'Gewonnen! 🎉' : uitslag === 'ai' ? 'Verloren...' : 'Gelijkspel!',
+        uitslag === 'jij' ? 'gewonnen' : uitslag === 'ai' ? 'ai-denkt' : ''
+      );
+
+      const id = spelId;
+      setTimeout(() => {
+        if (id !== spelId) return;
+        document.getElementById('popup-emoji').textContent = uitslag === 'jij' ? '🏆' : uitslag === 'ai' ? '🤖' : '🤝';
+        document.getElementById('popup-titel').textContent = uitslag === 'jij' ? 'Gewonnen!' : uitslag === 'ai' ? 'Verloren!' : 'Gelijkspel!';
+        document.getElementById('popup-tekst').textContent =
+          uitslag === 'jij' ? 'Drie op een rij, goed gedaan!' :
+          uitslag === 'ai'  ? 'De AI had drie op een rij. Probeer het opnieuw!' :
+          niveau === 'moeilijk' ? 'Op moeilijk is gelijkspel het hoogst haalbare!' : 'Het bord is vol, geen winnaar.';
+        document.getElementById('overlay').classList.add('toon');
+      }, 700);
+      return true;
+    }
+
+    function nieuwSpel(wisselBeginner = true) {
+      spelId++;
+      if (wisselBeginner && bord) jijBegint = !jijBegint;
+      bord = Array(9).fill(LEEG);
+      klaar = false;
+      jijAanBeurt = jijBegint;
+      vakken.forEach(v => { v.className = 'vak'; });
+      document.getElementById('overlay').classList.remove('toon');
+      teken();
+      if (jijAanBeurt) zetStatus('Jij begint');
+      else aiBeurt();
+    }
+
+    /* ── Knoppen ────────────────────────── */
+    document.getElementById('niveau-knoppen').addEventListener('click', e => {
+      const knop = e.target.closest('.niveau-knop');
+      if (!knop) return;
+      document.querySelectorAll('.niveau-knop').forEach(k => k.classList.remove('actief'));
+      knop.classList.add('actief');
+      niveau = knop.dataset.niveau;
+      nieuwSpel(false);
+    });
+    document.getElementById('opnieuw').addEventListener('click', () => nieuwSpel());
+    document.getElementById('popup-opnieuw').addEventListener('click', () => nieuwSpel());
+
+    nieuwSpel();
+  </script>
+</body>
+</html>
