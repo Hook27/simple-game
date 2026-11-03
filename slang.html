@@ -271,13 +271,9 @@
         for (let y = 0; y < N; y++)
           if ((x + y) % 2) ctx.fillRect(x * c, y * c, c, c);
 
-      // appel
-      if (eten) {
-        ctx.font = `${c * 0.85}px sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('🍎', eten[0] * c + c / 2, eten[1] * c + c / 2 + c * 0.05);
-      }
+      // appel: zelf getekend i.p.v. een emoji, zodat hij op elk apparaat zichtbaar is
+      // (Windows tekende de emoji met de bijna doorzichtige kleur van het dambord)
+      if (eten) tekenAppel(eten[0] * c + c / 2, eten[1] * c + c / 2, c);
 
       // slang: van staart naar kop, kleur loopt van donker naar licht groen
       const dood = toestand === 'over';
@@ -301,6 +297,37 @@
         ctx.fillStyle = '#0d1b2e';
         ctx.beginPath(); ctx.arc(ox + dx * c * 0.04, oy + dy * c * 0.04, c * 0.06, 0, Math.PI * 2); ctx.fill();
       }
+    }
+
+    function tekenAppel(x, y, c) {
+      const r = c * 0.36;
+      ctx.save();
+      // gloed, zodat de appel opvalt op het donkere veld
+      ctx.shadowColor = 'rgba(248,113,113,0.6)';
+      ctx.shadowBlur = c * 0.4;
+      const g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.2, r * 0.1, x, y + r * 0.1, r * 1.1);
+      g.addColorStop(0, '#fca5a5');
+      g.addColorStop(0.45, '#ef4444');
+      g.addColorStop(1, '#b91c1c');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(x, y + r * 0.12, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      // steeltje
+      ctx.strokeStyle = '#7c4a1e';
+      ctx.lineWidth = Math.max(1.5, c * 0.07);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(x, y - r * 0.75);
+      ctx.lineTo(x + r * 0.12, y - r * 1.2);
+      ctx.stroke();
+      // blaadje
+      ctx.fillStyle = '#4ade80';
+      ctx.beginPath();
+      ctx.ellipse(x + r * 0.45, y - r * 1.05, r * 0.38, r * 0.17, -0.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
     }
 
     function rondRect(x, y, w, h, r) {
