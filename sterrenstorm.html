@@ -1,0 +1,1381 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Sterrenstorm 3D</title>
+  <link rel="icon" href="icons/sterrenstorm.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="stijl.css">
+  <link rel="stylesheet" href="arcade.css">
+  <script src="nav.js" defer></script>
+  <script src="arcade.js"></script>
+  <style>
+    /* het 3D-veld vult alle ruimte (geen vaste verhouding zoals bij de 2D-spellen) */
+    #spel { width: 100%; height: 100%; overflow: hidden; border-radius: 10px; }
+    #spel canvas { border-radius: 10px; }
+    body[data-toestand="spelen"] #spel { cursor: none; }
+
+    body[data-toestand="menu"] .hud, body[data-toestand="laden"] .hud { display: none; }
+    .hud { position: absolute; inset: 0; pointer-events: none; font-family: "Segoe UI", system-ui, sans-serif; color: #e2e8f0; }
+    .hud .label { font-size: 0.62rem; letter-spacing: 1.4px; color: rgba(144,205,244,0.8); font-weight: 700; }
+    .hud .groot { font-size: 1.35rem; font-weight: 900; text-shadow: 0 0 12px rgba(34,211,238,0.6); }
+    #hudLinks  { position: absolute; top: 12px; left: 14px; }
+    #hudRechts { position: absolute; top: 12px; right: 14px; text-align: right; }
+    #hudRechts .groot { color: #facc15; text-shadow: 0 0 12px rgba(250,204,21,0.5); }
+    #combo { margin-top: 6px; font-weight: 900; color: #facc15; font-size: 0.95rem; text-shadow: 0 0 10px rgba(250,204,21,0.7); min-height: 1.2em; }
+    #hudOnder { position: absolute; left: 14px; bottom: 14px; width: min(260px, 46%); }
+    .balk { height: 8px; border-radius: 4px; background: rgba(255,255,255,0.1); overflow: hidden; margin: 4px 0 8px; }
+    .balk > div { height: 100%; width: 100%; border-radius: 4px; transition: width 0.15s; }
+    #schildBalk { background: linear-gradient(90deg, #0ea5e9, #22d3ee); box-shadow: 0 0 10px #22d3ee; }
+    #rolBalk { background: #a78bfa; box-shadow: 0 0 8px #a78bfa; }
+    .rij { display: flex; gap: 14px; align-items: center; font-size: 0.8rem; font-weight: 800; }
+    #levens { color: #22d3ee; letter-spacing: 2px; }
+    #raketten { color: #fb923c; }
+    #power { color: #4ade80; }
+    #baasPaneel { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); width: min(420px, 50%); text-align: center; display: none; }
+    #baasPaneel .label { color: #fda4af; }
+    #baasBalk { background: linear-gradient(90deg, #f43f5e, #fb923c); box-shadow: 0 0 12px #f43f5e; }
+    #baasDelen { font-size: 0.7rem; color: #fecdd3; font-weight: 700; }
+
+    #banner { position: absolute; left: 0; right: 0; top: 26%; text-align: center; opacity: 0; transition: opacity 0.35s; }
+    #banner .titel { font-size: clamp(1.8rem, 6vw, 3.2rem); font-weight: 900; letter-spacing: 2px; }
+    #banner .sub { font-size: clamp(0.85rem, 2.4vw, 1.05rem); font-weight: 600; margin-top: 6px; color: #e2e8f0; }
+    #flits { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+
+    .scherm { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; pointer-events: auto; background: radial-gradient(ellipse at center, rgba(5,6,20,0.25), rgba(5,6,20,0.75)); }
+    body[data-toestand="menu"]  #menu  { display: flex; }
+    body[data-toestand="pauze"] #pauzeScherm { display: flex; }
+    body[data-toestand="over"]  #overScherm { display: flex; }
+    .scherm h1 { font-size: clamp(2.4rem, 9vw, 5rem); font-weight: 900; line-height: 0.95; letter-spacing: 2px; color: #ecfeff; text-shadow: 0 0 18px #22d3ee, 0 0 42px #0891b2; }
+    .scherm h1 span { display: block; font-size: 0.42em; letter-spacing: 10px; color: #fdf4ff; text-shadow: 0 0 16px #e879f9, 0 0 36px #a21caf; margin-top: 8px; }
+    .scherm p { color: rgba(203,213,225,0.9); font-size: 0.9rem; line-height: 1.6; margin-top: 14px; max-width: 460px; }
+    .scherm .knop { margin-top: 22px; font-size: 1rem; padding: 12px 34px; }
+    .scherm .klein { font-size: 0.75rem; color: rgba(144,205,244,0.75); }
+    .stats { margin-top: 16px; display: grid; grid-template-columns: auto auto; gap: 6px 30px; font-size: 0.92rem; }
+    .stats div:nth-child(odd) { text-align: left; color: rgba(203,213,225,0.85); }
+    .stats div:nth-child(even) { text-align: right; font-weight: 800; }
+    #nieuwRecord { color: #facc15; font-weight: 900; font-size: 1.2rem; margin-top: 8px; text-shadow: 0 0 14px rgba(250,204,21,0.7); }
+    #geenWebgl { display: none; }
+
+    .aanraak-knop.midden { left: 50%; transform: translateX(-50%); }
+    #pauzeKnop { top: 12px; right: 12px; bottom: auto; width: 46px; height: 46px; font-size: 1rem; }
+    @media (pointer: coarse) {
+      #hudRechts { top: 66px; }
+      #hudOnder { bottom: 84px; }
+    }
+  </style>
+  <script type="importmap">{ "imports": { "three": "./lib/three/three.module.min.js" } }</script>
+</head>
+<body data-toestand="laden">
+
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-logo">🎮 <span>Spelletjes</span></a>
+      <a href="geheugen-spel.html" class="nav-tab">Geheugen spel</a>
+      <a href="vier-op-rij.html" class="nav-tab">Vier op een rij</a>
+      <a href="rots-papier-schaar.html" class="nav-tab">Rots-Papier-Schaar</a>
+      <a href="pixel-breakout.html" class="nav-tab">Pixel Breakout</a>
+      <a href="boter-kaas-en-eieren.html" class="nav-tab">Boter-kaas-en-eieren</a>
+      <a href="galgje.html" class="nav-tab">Galgje</a>
+      <a href="slang.html" class="nav-tab">Slang</a>
+      <a href="mijnenveger.html" class="nav-tab">Mijnenveger</a>
+      <a href="neon-sterrenjager.html" class="nav-tab">Sterrenjager</a>
+      <a href="planeetverdediger.html" class="nav-tab">Planeetverdediger</a>
+      <a href="neontunnel.html" class="nav-tab">Neontunnel</a>
+      <a href="sterrensprong.html" class="nav-tab">Sterrensprong</a>
+      <a href="sterrenstorm.html" class="nav-tab actief">Sterrenstorm 3D</a>
+    </div>
+  </nav>
+
+  <div id="wrap">
+    <div id="spel">
+      <canvas id="cv"></canvas>
+
+      <div class="hud">
+        <div id="hudLinks"><div class="label">SCORE</div><div class="groot" id="score">0</div><div id="combo"></div></div>
+        <div id="hudRechts"><div class="label">RECORD</div><div class="groot" id="record">0</div><div class="label" id="golfLabel" style="margin-top:6px">GOLF 1</div></div>
+        <div id="baasPaneel"><div class="label" id="baasNaam">MOEDERSCHIP</div><div class="balk"><div id="baasBalk"></div></div><div id="baasDelen"></div></div>
+        <div id="hudOnder">
+          <div class="label">SCHILD</div><div class="balk"><div id="schildBalk"></div></div>
+          <div class="rij"><span id="levens"></span><span id="raketten"></span><span id="power"></span></div>
+          <div class="label" style="margin-top:8px">ROL</div><div class="balk" style="height:4px"><div id="rolBalk"></div></div>
+        </div>
+        <div id="banner"><div class="titel" id="bannerTitel"></div><div class="sub" id="bannerSub"></div></div>
+        <div id="flits"></div>
+      </div>
+
+      <div class="scherm" id="menu">
+        <h1>STERRENSTORM<span>3D</span></h1>
+        <p id="menuUitleg">Vlieg door asteroïdenvelden, schiet vijandelijke jagers en mijnen neer en ontmantel elke vierde golf een gigantisch moederschip.</p>
+        <p class="klein" id="menuBesturing"></p>
+        <button class="knop" id="startKnop" type="button">▶ Start</button>
+        <p class="klein" id="menuRecord"></p>
+        <p id="geenWebgl">Je browser ondersteunt geen WebGL, dus dit 3D-spel kan hier helaas niet draaien.</p>
+      </div>
+      <div class="scherm" id="pauzeScherm">
+        <h1 style="font-size:3rem">PAUZE</h1>
+        <button class="knop" id="hervatKnop" type="button">▶ Verder</button>
+        <p class="klein">P of Esc = pauze · M = geluid</p>
+      </div>
+      <div class="scherm" id="overScherm">
+        <h1 style="font-size:clamp(2.2rem,8vw,4rem)">GAME OVER</h1>
+        <div id="nieuwRecord"></div>
+        <div class="stats" id="eindStats"></div>
+        <button class="knop" id="opnieuwKnop" type="button">↻ Opnieuw</button>
+      </div>
+
+      <button class="aanraak-knop" id="pauzeKnop" type="button" aria-label="Pauze">⏸</button>
+      <button class="aanraak-knop links" id="rolKnop" type="button" aria-label="Rol">🌀</button>
+      <button class="aanraak-knop rechts" id="raketKnop" type="button" aria-label="Raket">🚀<span class="aantal" id="raketAantal">3</span></button>
+    </div>
+  </div>
+
+  <div class="onderbalk">
+    <button class="geluid-knop" id="geluidKnop" type="button">🔊 Geluid</button>
+    <span class="toetsen">Muis of WASD/pijltjes = vliegen · schieten gaat vanzelf · spatie of rechtermuisknop = raket · Shift = rol · P = pauze</span>
+    <span class="aanraak">Sleep om te vliegen · schieten gaat vanzelf · 🚀 = raket · 🌀 = rol (even onkwetsbaar)</span>
+  </div>
+
+  <script type="module">
+  import * as THREE from 'three';
+  import { EffectComposer } from './lib/three/postprocessing/EffectComposer.js';
+  import { RenderPass } from './lib/three/postprocessing/RenderPass.js';
+  import { UnrealBloomPass } from './lib/three/postprocessing/UnrealBloomPass.js';
+  import { OutputPass } from './lib/three/postprocessing/OutputPass.js';
+
+  /* ════════════════════════════════════════════════════════════
+     Opbouw: renderer, camera, licht en nabewerking (bloom = lichtgloed)
+  ════════════════════════════════════════════════════════════ */
+  const $ = id => document.getElementById(id);
+  const spelEl = $('spel'), cv = $('cv');
+  const geluid = Arcade.maakGeluid('storm-geluid', $('geluidKnop'));
+  const recordOpslag = Arcade.record('storm-record');
+  const aanraak = Arcade.aanraak();
+
+  let renderer;
+  try {
+    renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: false, powerPreference: 'high-performance' });
+  } catch (e) {
+    $('geenWebgl').style.display = 'block';
+    $('startKnop').style.display = 'none';
+    document.body.dataset.toestand = 'menu';
+    throw e;
+  }
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
+  let pixelRatio = Math.min(window.devicePixelRatio || 1, aanraak ? 1.5 : 2);
+  renderer.setPixelRatio(pixelRatio);
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x02030a);
+  scene.fog = new THREE.FogExp2(0x050418, 0.0042);
+  const camera = new THREE.PerspectiveCamera(70, 1, 0.1, 1500);
+  const CAM_Z = 16;
+
+  scene.add(new THREE.HemisphereLight(0x7f8cff, 0x1a0422, 1.1));
+  const zon = new THREE.DirectionalLight(0xfff1e0, 2.6);
+  zon.position.set(-6, 10, 8);
+  scene.add(zon);
+  const randlicht = new THREE.DirectionalLight(0xff3fa6, 1.4);
+  randlicht.position.set(4, -3, -10);
+  scene.add(randlicht);
+
+  const composer = new EffectComposer(renderer);
+  composer.addPass(new RenderPass(scene, camera));
+  const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.95, 0.42, 0.82);   // sterkte, straal, drempel: alleen neon gloeit
+  composer.addPass(bloom);
+  composer.addPass(new OutputPass());
+
+  let GRENS_X = 10, GRENS_Y = 6;
+  function maatAanpassen() {
+    const w = spelEl.clientWidth, h = spelEl.clientHeight;
+    if (!w || !h) return;
+    renderer.setPixelRatio(pixelRatio);
+    renderer.setSize(w, h, false);
+    composer.setPixelRatio(pixelRatio);
+    composer.setSize(w, h);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    const halfH = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * CAM_Z;
+    GRENS_Y = halfH * 0.6;
+    GRENS_X = Math.max(4.2, halfH * camera.aspect * 0.78);
+    deeltjesMat.uniforms.uSchaal.value = renderer.domElement.height / 900;
+  }
+  window.addEventListener('resize', maatAanpassen);
+  if (window.ResizeObserver) new ResizeObserver(maatAanpassen).observe(spelEl);
+
+  /* ════════════════════════════════════════════════════════════
+     Geluid
+  ════════════════════════════════════════════════════════════ */
+  function sfx(soort) {
+    const g = geluid;
+    switch (soort) {
+      case 'laser':    if (g.mag(soort, 75)) g.toon(1250, 0.07, 'square', 0.018, 420); break;
+      case 'vijandLaser': if (g.mag(soort, 110)) g.toon(520, 0.12, 'sawtooth', 0.02, 260); break;
+      case 'raak':     if (g.mag(soort, 40)) g.toon(260, 0.05, 'square', 0.035, 140); break;
+      case 'blok':     if (g.mag(soort, 60)) g.toon(1800, 0.04, 'triangle', 0.03); break;
+      case 'boem':     if (g.mag(soort, 40)) { g.knal(0.5, 0.35, 2200); g.toon(90, 0.4, 'sine', 0.18, 40); } break;
+      case 'grootBoem': g.knal(1.6, 0.8, 3000); g.toon(70, 1.4, 'sawtooth', 0.18, 20); break;
+      case 'megaBoem': g.knal(3.2, 1, 4000, 30); g.toon(55, 3, 'sawtooth', 0.25, 15); g.toon(110, 2.4, 'sine', 0.3, 30); break;
+      case 'raket':    g.knal(0.6, 0.2, 5000, 400); g.toon(300, 0.5, 'sawtooth', 0.04, 900); break;
+      case 'rol':      g.toon(300, 0.4, 'sine', 0.1, 1200); break;
+      case 'geraakt':  g.knal(0.35, 0.4, 1600); g.toon(180, 0.25, 'square', 0.08, 70); break;
+      case 'leven':    g.knal(1.4, 0.7, 2400); g.toon(400, 1.2, 'sawtooth', 0.18, 40); break;
+      case 'powerup':  [523, 784, 1047].forEach((f, i) => g.toon(f, 0.12, 'square', 0.1, null, i * 0.07)); break;
+      case 'combo':    g.toon(660, 0.09, 'triangle', 0.1, 990); break;
+      case 'golf':     [392, 523, 659, 784].forEach((f, i) => g.toon(f, 0.15, 'square', 0.08, null, i * 0.09)); break;
+      case 'alarm':    for (let i = 0; i < 5; i++) { g.toon(880, 0.24, 'square', 0.07, 440, i * 0.55); g.toon(660, 0.24, 'square', 0.05, 330, i * 0.55 + 0.27); } break;
+      case 'warp':     g.knal(2.2, 0.35, 6000, 200); g.toon(80, 2, 'sawtooth', 0.08, 600); break;
+      case 'schildWeg': g.toon(1600, 0.8, 'sine', 0.2, 120); g.knal(0.8, 0.4, 5000, 300); break;
+      case 'gameover': [330, 262, 196, 131].forEach((f, i) => g.toon(f, 0.45, 'sawtooth', 0.12, null, i * 0.25)); break;
+    }
+  }
+
+  /* ════════════════════════════════════════════════════════════
+     Achtergrond: nevelkoepel, planeet en sterren
+  ════════════════════════════════════════════════════════════ */
+  function canvasTextuur(w, h, teken) {
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    teken(c.getContext('2d'), w, h);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  }
+  const nevelTex = canvasTextuur(2048, 1024, (g, w, h) => {
+    g.fillStyle = '#03020c'; g.fillRect(0, 0, w, h);
+    const blobs = [[0.18, 0.45, 0.32, '170,40,220'], [0.36, 0.55, 0.22, '30,120,255'], [0.55, 0.4, 0.3, '240,60,160'], [0.72, 0.6, 0.26, '40,200,255'], [0.9, 0.45, 0.28, '120,40,240']];
+    for (const [x, y, r, k] of blobs)
+      for (const dx of [-1, 0, 1]) {
+        const gr = g.createRadialGradient((x + dx) * w, y * h, 0, (x + dx) * w, y * h, r * w);
+        gr.addColorStop(0, `rgba(${k},0.42)`); gr.addColorStop(0.5, `rgba(${k},0.13)`); gr.addColorStop(1, `rgba(${k},0)`);
+        g.fillStyle = gr; g.fillRect(0, 0, w, h);
+      }
+    for (let i = 0; i < 2600; i++) {
+      const a = Math.random();
+      g.fillStyle = `rgba(255,255,255,${a * a * 0.9 + 0.05})`;
+      const s = Math.random() < 0.04 ? 2 : 1;
+      g.fillRect(Math.random() * w, Math.random() * h, s, s);
+    }
+  });
+  const koepel = new THREE.Mesh(new THREE.SphereGeometry(1100, 48, 24), new THREE.MeshBasicMaterial({ map: nevelTex, side: THREE.BackSide, fog: false, depthWrite: false }));
+  scene.add(koepel);
+
+  const planeetTex = canvasTextuur(1024, 512, (g, w, h) => {
+    for (let y = 0; y < h; y++) {
+      const t = y / h, golf = Math.sin(t * 38) * 0.5 + Math.sin(t * 91 + 1) * 0.25;
+      g.fillStyle = `hsl(${270 + golf * 25},${45 + golf * 20}%,${30 + golf * 14 + Math.sin(t * Math.PI) * 10}%)`;
+      g.fillRect(0, y, w, 1);
+    }
+    for (let i = 0; i < 40; i++) { g.fillStyle = `rgba(255,220,255,${Math.random() * 0.12})`; g.beginPath(); g.ellipse(Math.random() * w, Math.random() * h, 40 + Math.random() * 120, 4 + Math.random() * 8, 0, 0, Math.PI * 2); g.fill(); }
+  });
+  const planeet = new THREE.Mesh(new THREE.SphereGeometry(160, 64, 32), new THREE.MeshStandardMaterial({ map: planeetTex, roughness: 1, metalness: 0, fog: false }));
+  planeet.position.set(-560, 250, -900);
+  scene.add(planeet);
+  const atmosfeer = new THREE.Mesh(new THREE.SphereGeometry(172, 64, 32), new THREE.ShaderMaterial({
+    uniforms: { kleur: { value: new THREE.Color(0.55, 0.25, 1.0) } },
+    vertexShader: 'varying vec3 vN; varying vec3 vV; void main(){ vN = normalize(normalMatrix * normal); vec4 mv = modelViewMatrix * vec4(position,1.0); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }',
+    fragmentShader: 'uniform vec3 kleur; varying vec3 vN; varying vec3 vV; void main(){ float f = pow(1.0 - max(dot(vN, vV), 0.0), 3.0); gl_FragColor = vec4(kleur * f, f); }',
+    blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, side: THREE.FrontSide, fog: false,
+  }));
+  atmosfeer.position.copy(planeet.position);
+  scene.add(atmosfeer);
+  const ring = new THREE.Mesh(new THREE.RingGeometry(200, 290, 96), new THREE.MeshBasicMaterial({ color: 0x8b6fd6, transparent: true, opacity: 0.16, side: THREE.DoubleSide, fog: false, depthWrite: false }));
+  ring.position.copy(planeet.position);
+  ring.rotation.set(1.25, 0.25, 0.3);
+  scene.add(ring);
+
+  // sterren die langs vliegen (geven snelheid) en warpstrepen
+  const STER_N = 1400, STER_DIEPTE = 600;
+  const sterPos = new Float32Array(STER_N * 3);
+  for (let i = 0; i < STER_N; i++) { sterPos[i * 3] = (Math.random() - 0.5) * 300; sterPos[i * 3 + 1] = (Math.random() - 0.5) * 180; sterPos[i * 3 + 2] = -Math.random() * STER_DIEPTE + 30; }
+  const sterGeo = new THREE.BufferGeometry();
+  sterGeo.setAttribute('position', new THREE.BufferAttribute(sterPos, 3));
+  const sterren = new THREE.Points(sterGeo, new THREE.PointsMaterial({ color: 0xcfe8ff, size: 0.22, map: null, sizeAttenuation: true, transparent: true, opacity: 0.75, depthWrite: false, fog: false, blending: THREE.AdditiveBlending }));
+  sterren.frustumCulled = false;
+  scene.add(sterren);
+
+  const WARP_N = 260;
+  const warpPos = new Float32Array(WARP_N * 6);
+  const warpGeo = new THREE.BufferGeometry();
+  warpGeo.setAttribute('position', new THREE.BufferAttribute(warpPos, 3));
+  const warpLijnen = new THREE.LineSegments(warpGeo, new THREE.LineBasicMaterial({ color: new THREE.Color(1.2, 1.6, 2.4), transparent: true, opacity: 0, depthWrite: false, fog: false, toneMapped: false }));
+  warpLijnen.frustumCulled = false;
+  scene.add(warpLijnen);
+  const warpData = Array.from({ length: WARP_N }, () => ({ x: 0, y: 0, z: 0 }));
+  function zetWarpLijn(d) { const a = Math.random() * Math.PI * 2, r = 6 + Math.random() * 60; d.x = Math.cos(a) * r; d.y = Math.sin(a) * r * 0.6; d.z = -Math.random() * 500; }
+  warpData.forEach(zetWarpLijn);
+
+  /* ════════════════════════════════════════════════════════════
+     Deeltjes: één groot puntenwolk-object voor alle explosies (snel)
+  ════════════════════════════════════════════════════════════ */
+  const D_N = 6000;
+  const dPos = new Float32Array(D_N * 3), dKleur = new Float32Array(D_N * 3), dGrootte = new Float32Array(D_N), dAlfa = new Float32Array(D_N);
+  const dVel = new Float32Array(D_N * 3), dLeven = new Float32Array(D_N), dMax = new Float32Array(D_N), dBegin = new Float32Array(D_N), dWrijving = new Float32Array(D_N);
+  let dVolgende = 0;
+  const dGeo = new THREE.BufferGeometry();
+  dGeo.setAttribute('position', new THREE.BufferAttribute(dPos, 3).setUsage(THREE.DynamicDrawUsage));
+  dGeo.setAttribute('kleur', new THREE.BufferAttribute(dKleur, 3).setUsage(THREE.DynamicDrawUsage));
+  dGeo.setAttribute('grootte', new THREE.BufferAttribute(dGrootte, 1).setUsage(THREE.DynamicDrawUsage));
+  dGeo.setAttribute('alfa', new THREE.BufferAttribute(dAlfa, 1).setUsage(THREE.DynamicDrawUsage));
+  const deeltjesMat = new THREE.ShaderMaterial({
+    uniforms: { uSchaal: { value: 1 } },
+    vertexShader: `attribute float grootte; attribute float alfa; attribute vec3 kleur; uniform float uSchaal;
+      varying float vA; varying vec3 vK;
+      void main(){ vA = alfa; vK = kleur; vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        gl_PointSize = grootte * uSchaal * (380.0 / max(0.5, -mv.z)); gl_Position = projectionMatrix * mv; }`,
+    fragmentShader: `varying float vA; varying vec3 vK;
+      void main(){ float d = length(gl_PointCoord - 0.5); if (d > 0.5) discard; float a = smoothstep(0.5, 0.0, d);
+        gl_FragColor = vec4(vK * (0.6 + a * 1.6), a * vA); }`,
+    blending: THREE.AdditiveBlending, transparent: true, depthWrite: false,
+  });
+  const deeltjesObj = new THREE.Points(dGeo, deeltjesMat);
+  deeltjesObj.frustumCulled = false;
+  scene.add(deeltjesObj);
+  const tmpKleur = new THREE.Color();
+  function deeltje(x, y, z, vx, vy, vz, kleur, grootte, leven, wrijving = 0.96) {
+    const i = dVolgende; dVolgende = (dVolgende + 1) % D_N;
+    dPos[i * 3] = x; dPos[i * 3 + 1] = y; dPos[i * 3 + 2] = z;
+    dVel[i * 3] = vx; dVel[i * 3 + 1] = vy; dVel[i * 3 + 2] = vz;
+    tmpKleur.set(kleur);
+    dKleur[i * 3] = tmpKleur.r; dKleur[i * 3 + 1] = tmpKleur.g; dKleur[i * 3 + 2] = tmpKleur.b;
+    dGrootte[i] = dBegin[i] = grootte; dLeven[i] = dMax[i] = leven; dAlfa[i] = 1; dWrijving[i] = wrijving;
+  }
+  function updateDeeltjes(ts) {
+    for (let i = 0; i < D_N; i++) {
+      if (dLeven[i] <= 0) { if (dAlfa[i] !== 0) dAlfa[i] = 0; continue; }
+      dLeven[i] -= ts;
+      const w = Math.pow(dWrijving[i], ts);
+      dVel[i * 3] *= w; dVel[i * 3 + 1] *= w; dVel[i * 3 + 2] *= w;
+      dPos[i * 3] += dVel[i * 3] * ts; dPos[i * 3 + 1] += dVel[i * 3 + 1] * ts; dPos[i * 3 + 2] += dVel[i * 3 + 2] * ts + wereldSnelheid * 0.5 * ts;
+      const p = Math.max(0, dLeven[i] / dMax[i]);
+      dAlfa[i] = Math.min(1, p * 1.6);
+      dGrootte[i] = dBegin[i] * (0.4 + p * 0.6);
+    }
+    for (const k of ['position', 'kleur', 'grootte', 'alfa']) dGeo.attributes[k].needsUpdate = true;
+  }
+
+  // schokgolven, flitslichten en brokstukken
+  const ringGeo = new THREE.RingGeometry(0.85, 1, 64);
+  const schokgolven = [];
+  for (let i = 0; i < 24; i++) {
+    const m = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));
+    m.visible = false; m.userData = { leven: 0 };
+    scene.add(m); schokgolven.push(m);
+  }
+  function schokgolf(pos, kleur, grootte, duur = 30) {
+    const m = schokgolven.find(s => !s.visible) || schokgolven[0];
+    m.visible = true; m.position.copy(pos);
+    m.material.color.set(kleur).multiplyScalar(2.2);
+    m.userData = { leven: duur, max: duur, grootte };
+    m.scale.setScalar(0.1);
+  }
+  const flitsLichten = [];
+  for (let i = 0; i < 4; i++) { const l = new THREE.PointLight(0xffaa55, 0, 90, 1.2); scene.add(l); flitsLichten.push(l); }
+  let flitsIndex = 0;
+  function flitsLicht(pos, kleur, sterkte) {
+    const l = flitsLichten[flitsIndex]; flitsIndex = (flitsIndex + 1) % flitsLichten.length;
+    l.position.copy(pos); l.color.set(kleur); l.intensity = sterkte; l.userData.sterkte = sterkte;
+  }
+  const brokGeo = new THREE.TetrahedronGeometry(0.45);
+  const brokstukken = [];
+  for (let i = 0; i < 90; i++) {
+    const m = new THREE.Mesh(brokGeo, new THREE.MeshStandardMaterial({ color: 0x334155, emissive: 0xff7a1a, emissiveIntensity: 1.5, roughness: 0.8 }));
+    m.visible = false; scene.add(m); brokstukken.push(m);
+  }
+  let brokIndex = 0;
+  function brokstuk(pos, kracht, kleur) {
+    const m = brokstukken[brokIndex]; brokIndex = (brokIndex + 1) % brokstukken.length;
+    m.visible = true; m.position.copy(pos);
+    m.material.emissive.set(kleur);
+    const a = Math.random() * Math.PI * 2, b = Math.random() * Math.PI - Math.PI / 2;
+    m.userData = { v: new THREE.Vector3(Math.cos(a) * Math.cos(b), Math.sin(b), Math.sin(a) * Math.cos(b)).multiplyScalar(kracht * (0.4 + Math.random())), draai: new THREE.Vector3(Math.random(), Math.random(), Math.random()).multiplyScalar(0.3), leven: 60 + Math.random() * 50 };
+    m.scale.setScalar(0.6 + Math.random() * 1.4);
+  }
+
+  function explosie(pos, kleur, grootte = 1) {
+    const n = Math.min(900, Math.round(60 * grootte));
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2, b = Math.acos(Math.random() * 2 - 1), s = (0.15 + Math.random() * 0.55) * Math.sqrt(grootte);
+      const k = Math.random() < 0.2 ? 0xffffff : Math.random() < 0.5 ? kleur : 0xffb347;
+      deeltje(pos.x, pos.y, pos.z, Math.sin(b) * Math.cos(a) * s, Math.sin(b) * Math.sin(a) * s, Math.cos(b) * s, k, 0.6 + Math.random() * 1.2 * Math.sqrt(grootte), 35 + Math.random() * 40, 0.95);
+    }
+    schokgolf(pos, kleur, 4 * grootte, 26 + grootte * 4);
+    flitsLicht(pos, kleur, 40 * grootte);
+    for (let i = 0; i < Math.min(14, Math.round(grootte * 3)); i++) brokstuk(pos, 0.25 * Math.sqrt(grootte), kleur);
+  }
+  function vonken(pos, kleur, n = 6) {
+    for (let i = 0; i < n; i++) deeltje(pos.x, pos.y, pos.z, (Math.random() - 0.5) * 0.5, (Math.random() - 0.5) * 0.5, Math.random() * 0.5, kleur, 0.5 + Math.random() * 0.5, 14 + Math.random() * 10, 0.9);
+  }
+
+  /* ════════════════════════════════════════════════════════════
+     Modellen: donkere vlakken met neon-randen (de bloom laat ze gloeien)
+  ════════════════════════════════════════════════════════════ */
+  const randCache = new Map();
+  function neonDeel(geo, kleur, { vul = 0x0b0d1f, sterkte = 2.4, metaal = 0.5, eigen = false } = {}) {
+    const g = new THREE.Group();
+    const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: vul, metalness: metaal, roughness: 0.45, emissive: kleur, emissiveIntensity: 0.06, flatShading: true }));
+    let rand = randCache.get(geo);
+    if (!rand) { rand = new THREE.EdgesGeometry(geo, 25); randCache.set(geo, rand); }
+    const lijnMat = new THREE.LineBasicMaterial({ color: new THREE.Color(kleur).multiplyScalar(sterkte), toneMapped: false });
+    const lijnen = new THREE.LineSegments(rand, lijnMat);
+    g.add(mesh, lijnen);
+    g.userData.lijnMat = lijnMat;
+    g.userData.basisKleur = lijnMat.color.clone();
+    return g;
+  }
+  function gloed(kleur, grootte) {
+    const tex = gloeiTex;
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, color: new THREE.Color(kleur).multiplyScalar(1.5), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, toneMapped: false }));
+    s.scale.setScalar(grootte);
+    return s;
+  }
+  const gloeiTex = canvasTextuur(128, 128, (g, w) => {
+    const gr = g.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2);
+    gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.25, 'rgba(255,255,255,0.55)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, w, w);
+  });
+  sterren.material.map = gloeiTex;   // ronde sterren in plaats van vierkantjes
+  sterren.material.needsUpdate = true;
+
+  // —— het schip van de speler ——
+  function maakSpelerSchip() {
+    const schip = new THREE.Group();
+    const romp = neonDeel(new THREE.ConeGeometry(0.75, 3.6, 6), 0x22d3ee, { vul: 0x0c2a3a });
+    romp.rotation.x = -Math.PI / 2;
+    const vleugelVorm = new THREE.Shape();
+    vleugelVorm.moveTo(0, -0.4); vleugelVorm.lineTo(2.8, 0.9); vleugelVorm.lineTo(2.6, 1.3); vleugelVorm.lineTo(0, 1.0); vleugelVorm.closePath();
+    const vleugelGeo = new THREE.ExtrudeGeometry(vleugelVorm, { depth: 0.12, bevelEnabled: false });
+    for (const s of [-1, 1]) {
+      const v = neonDeel(vleugelGeo, 0x22d3ee, { vul: 0x0c2a3a });
+      v.rotation.x = Math.PI / 2; v.scale.x = s; v.position.set(0, 0.06, 0.2);
+      schip.add(v);
+      const motor = neonDeel(new THREE.CylinderGeometry(0.22, 0.3, 1.2, 8), 0xa78bfa, { vul: 0x1e1b4b });
+      motor.rotation.x = Math.PI / 2; motor.position.set(s * 0.9, 0, 1.3);
+      schip.add(motor);
+      const vlam = gloed(0x67e8f9, 1.1); vlam.position.set(s * 0.9, 0, 2.05); schip.add(vlam);
+      schip.userData['vlam' + s] = vlam;
+    }
+    const kuip = new THREE.Mesh(new THREE.SphereGeometry(0.42, 16, 10), new THREE.MeshStandardMaterial({ color: 0x0b1120, emissive: 0x38bdf8, emissiveIntensity: 1.8, metalness: 0.9, roughness: 0.1 }));
+    kuip.scale.set(0.8, 0.6, 1.6); kuip.position.set(0, 0.32, -0.2);
+    schip.add(romp, kuip);
+    const schild = new THREE.Mesh(new THREE.SphereGeometry(3.1, 32, 16), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.3, 0.9, 2.2), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, wireframe: true }));
+    schip.add(schild);
+    schip.userData.schild = schild;
+    return schip;
+  }
+
+  // —— vijanden ——
+  const GEO = {
+    jagerRomp: new THREE.OctahedronGeometry(1, 0),
+    jagerVleugel: (() => { const s = new THREE.Shape(); s.moveTo(0, 0); s.lineTo(2.2, -0.8); s.lineTo(2.0, 0.6); s.lineTo(0, 0.5); s.closePath(); return new THREE.ExtrudeGeometry(s, { depth: 0.1, bevelEnabled: false }); })(),
+    kruiserRomp: new THREE.BoxGeometry(5.5, 1.4, 7),
+    kruiserToren: new THREE.CylinderGeometry(0.7, 1, 1.4, 6),
+    kruiserBrug: new THREE.BoxGeometry(2, 1, 2.2),
+    mijnKern: new THREE.IcosahedronGeometry(0.9, 0),
+    mijnStekel: new THREE.ConeGeometry(0.22, 0.9, 5),
+    powerup: new THREE.OctahedronGeometry(0.9, 0),
+    laser: new THREE.BoxGeometry(0.14, 0.14, 2.8),
+    vijandLaser: new THREE.BoxGeometry(0.2, 0.2, 2.2),
+    baasKogel: new THREE.IcosahedronGeometry(0.55, 1),
+    raket: new THREE.ConeGeometry(0.18, 0.9, 6),
+  };
+
+  function maakJager() {
+    const g = new THREE.Group();
+    const romp = neonDeel(GEO.jagerRomp, 0xf472b6, { vul: 0x2a0a22 });
+    romp.scale.set(0.8, 0.5, 1.6);
+    g.add(romp);
+    for (const s of [-1, 1]) { const v = neonDeel(GEO.jagerVleugel, 0xf472b6, { vul: 0x2a0a22 }); v.rotation.x = Math.PI / 2; v.scale.x = s; v.position.z = 0.4; g.add(v); }
+    const oog = gloed(0xff3b6b, 1.8); oog.position.z = 1.2; g.add(oog);
+    return g;
+  }
+  function maakKruiser() {
+    const g = new THREE.Group();
+    g.add(neonDeel(GEO.kruiserRomp, 0xfb923c, { vul: 0x24140a }));
+    const brug = neonDeel(GEO.kruiserBrug, 0xfb923c, { vul: 0x24140a }); brug.position.set(0, 1.1, 1.5); g.add(brug);
+    for (const x of [-2, 2]) { const t = neonDeel(GEO.kruiserToren, 0xfacc15, { vul: 0x24140a }); t.position.set(x, 1.1, -1.8); g.add(t); }
+    for (const x of [-1.8, 0, 1.8]) { const m = gloed(0xfb923c, 2.4); m.position.set(x, 0, -3.8); g.add(m); }
+    return g;
+  }
+  function maakMijn() {
+    const g = new THREE.Group();
+    const kern = neonDeel(GEO.mijnKern, 0xef4444, { vul: 0x2a0606 });
+    g.add(kern);
+    const richtingen = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
+    for (const [x, y, z] of richtingen) {
+      const s = neonDeel(GEO.mijnStekel, 0xfca5a5, { vul: 0x2a0606 });
+      s.position.set(x, y, z).multiplyScalar(0.95);
+      s.lookAt(x * 5, y * 5, z * 5); s.rotateX(Math.PI / 2);
+      g.add(s);
+    }
+    const licht = gloed(0xff2020, 2.6); g.add(licht); g.userData.licht = licht;
+    return g;
+  }
+  function asteroideGeo(r) {
+    const geo = new THREE.IcosahedronGeometry(r, 1);
+    const p = geo.attributes.position, v = new THREE.Vector3();
+    const zaad = Math.random() * 100;
+    for (let i = 0; i < p.count; i++) {
+      v.fromBufferAttribute(p, i);
+      const n = Math.sin(v.x * 1.7 + zaad) * Math.cos(v.y * 1.3 + zaad * 0.7) * Math.sin(v.z * 1.9 + zaad * 1.3);
+      v.multiplyScalar(1 + n * 0.28 + (Math.random() - 0.5) * 0.12);
+      p.setXYZ(i, v.x, v.y, v.z);
+    }
+    geo.computeVertexNormals();
+    return geo;
+  }
+  const ASTEROIDE_GEOS = { groot: [0, 1, 2].map(() => asteroideGeo(3.2)), middel: [0, 1, 2].map(() => asteroideGeo(1.8)), klein: [0, 1, 2].map(() => asteroideGeo(1.0)) };
+  const rotsMat = new THREE.MeshStandardMaterial({ color: 0x6b6675, roughness: 0.95, metalness: 0.05, flatShading: true });
+  function maakAsteroide(maat) {
+    const geos = ASTEROIDE_GEOS[maat];
+    const m = new THREE.Mesh(geos[Math.floor(Math.random() * geos.length)], rotsMat.clone());
+    return m;
+  }
+
+  /* ════════════════════════════════════════════════════════════
+     Spelstaat
+  ════════════════════════════════════════════════════════════ */
+  const speler = { obj: maakSpelerSchip(), x: 0, y: 0, vx: 0, vy: 0, schild: 100, levens: 3, raketten: 3, inv: 0, rol: 0, rolKoel: 0, vuur: 0, dood: false, respawn: 0, sindsSchade: 999, dubbel: 0, overdrive: 0 };
+  scene.add(speler.obj);
+  const vizier = gloed(0x22d3ee, 2.2);
+  vizier.material.opacity = 0.7;
+  scene.add(vizier);
+
+  let toestand = 'menu', tijd = 0, wereldSnelheid = 0.8, tijdSchaal = 1, slowmo = 0;
+  let vijanden = [], kogels = [], vijandKogels = [], raketten = [], powerups = [];
+  let score = 0, golf = 0, golfTijd = 0, wachtrij = [], golfKlaar = false, golfPauze = 0, baas = null;
+  let combo = { n: 0, timer: 0, mult: 1, best: 1 }, stats = { kills: 0, raketten: 0 };
+  let schok = 0, warp = 0, warpDoel = 0, eindTimer = 0, nieuwRecordGezet = false;
+  let record = recordOpslag.lees();
+
+  function zetToestand(t) { toestand = t; document.body.dataset.toestand = t; }
+
+  /* ── HUD ─────────────────────────────────── */
+  let bannerTimer = 0;
+  function zetBanner(titel, sub, kleur, duur = 150) {
+    $('bannerTitel').textContent = titel;
+    $('bannerTitel').style.color = kleur;
+    $('bannerTitel').style.textShadow = `0 0 18px ${kleur}, 0 0 40px ${kleur}`;
+    $('bannerSub').textContent = sub;
+    $('banner').style.opacity = 1;
+    bannerTimer = duur;
+  }
+  function flitsScherm(sterkte) { const f = $('flits'); f.style.transition = 'none'; f.style.opacity = sterkte; requestAnimationFrame(() => { f.style.transition = 'opacity 0.6s'; f.style.opacity = 0; }); }
+  const getal = Arcade.getal;
+  let vorigeHud = '';
+  function werkHudBij() {
+    const s = speler;
+    const sleutel = [Math.floor(score), golf, Math.ceil(s.schild), s.levens, s.raketten, combo.mult, Math.ceil(s.rolKoel / 10), s.dubbel > 0, s.overdrive > 0, baas ? Math.ceil(baas.totaalHp()) : -1].join('|');
+    if (sleutel === vorigeHud) return;
+    vorigeHud = sleutel;
+    $('score').textContent = getal(score);
+    $('record').textContent = getal(Math.max(record, score));
+    $('golfLabel').textContent = 'GOLF ' + golf;
+    $('combo').textContent = combo.mult > 1 ? 'COMBO ×' + combo.mult : '';
+    $('schildBalk').style.width = Math.max(0, s.schild) + '%';
+    $('schildBalk').style.background = s.schild > 50 ? '' : s.schild > 25 ? 'linear-gradient(90deg,#f59e0b,#facc15)' : 'linear-gradient(90deg,#dc2626,#f87171)';
+    $('levens').textContent = '▲'.repeat(Math.max(0, s.levens));
+    $('raketten').textContent = '🚀 ' + s.raketten;
+    $('raketAantal').textContent = s.raketten;
+    $('power').textContent = (s.dubbel > 0 ? 'DUBBEL ' : '') + (s.overdrive > 0 ? 'OVERDRIVE' : '');
+    $('rolBalk').style.width = (100 - s.rolKoel / 120 * 100) + '%';
+    if (baas && baas.binnen) {
+      $('baasPaneel').style.display = 'block';
+      $('baasNaam').textContent = 'MOEDERSCHIP ' + baas.nr;
+      $('baasBalk').style.width = Math.max(0, baas.totaalHp() / baas.maxHp * 100) + '%';
+      const gens = baas.delen.filter(d => d.soort === 'generator' && !d.kapot).length;
+      const torens = baas.delen.filter(d => d.soort === 'toren' && !d.kapot).length;
+      $('baasDelen').textContent = gens ? `Schildgeneratoren: ${gens} · Kanonnen: ${torens}` : `SCHILD WEG! Raak de kern! · Kanonnen: ${torens}`;
+    } else $('baasPaneel').style.display = 'none';
+  }
+
+  /* ── Golven ──────────────────────────────── */
+  function plan(over, actie) { wachtrij.push({ t: golfTijd + over, actie }); wachtrij.sort((a, b) => a.t - b.t); }
+  const willekeurig = Arcade.willekeurig;
+  const ONDERTITELS = { 1: 'Ze komen eraan!', 2: 'Asteroïdenveld in zicht', 3: 'Mijnenveld: schiet ze van een afstand', 5: 'Kruisers gesignaleerd' };
+
+  function startGolf(n) {
+    golf = n; golfTijd = 0; wachtrij = []; golfKlaar = false;
+    if (n % 4 === 0) {
+      zetBanner('⚠ WAARSCHUWING ⚠', 'MOEDERSCHIP NADERT VIA WARP', '#fb7185', 220);
+      sfx('alarm');
+      warpDoel = 1;
+      plan(150, () => { sfx('warp'); });
+      plan(200, () => maakBaas(n / 4));
+      return;
+    }
+    zetBanner('GOLF ' + n, ONDERTITELS[n] || ['Hou stand, piloot!', 'Volle kracht vooruit!', 'Ze geven niet op...', 'Laat niets door!'][n % 4], '#22d3ee', 140);
+    sfx('golf');
+    const groepen = Math.min(11, 3 + n);
+    let t = 90;
+    for (let i = 0; i < groepen; i++) { kiesGroep(n)(t); t += Math.max(70, 180 - n * 8); }
+  }
+  function kiesGroep(n) {
+    const pot = [groepJagersV, groepJagersRij];
+    if (n >= 2) pot.push(groepAsteroiden, groepAsteroiden);
+    if (n >= 3) pot.push(groepMijnen);
+    if (n >= 5) pot.push(groepKruiser);
+    if (n >= 6) pot.push(groepJagersV, groepMijnen);
+    return pot[Math.floor(Math.random() * pot.length)];
+  }
+
+  const SOORTEN = {
+    jager:   { hp: 3,  r: 1.7, punten: 150, kleur: 0xf472b6, drop: 0.08 },
+    kruiser: { hp: 34, r: 4.4, punten: 700, kleur: 0xfb923c, drop: 0.7 },
+    mijn:    { hp: 2,  r: 1.5, punten: 120, kleur: 0xef4444, drop: 0.04 },
+    groot:   { hp: 9,  r: 3.3, punten: 90,  kleur: 0xfbbf24, drop: 0.08 },
+    middel:  { hp: 3,  r: 1.9, punten: 45,  kleur: 0xfbbf24, drop: 0.03 },
+    klein:   { hp: 1,  r: 1.1, punten: 20,  kleur: 0xfbbf24, drop: 0.01 },
+  };
+  function nieuweVijand(soort, obj, x, y, z, extra = {}) {
+    const s = SOORTEN[soort];
+    const hp = s.hp + (soort === 'kruiser' ? (golf - 5) * 3 : soort === 'jager' && golf > 6 ? 1 : 0);
+    obj.position.set(x, y, z);
+    scene.add(obj);
+    const v = { soort, obj, hp, r: s.r, t: 0, flits: 0, fase: 'nadering', vuur: willekeurig(60, 150), ...extra };
+    vijanden.push(v);
+    return v;
+  }
+  function groepJagersV(t) {
+    const cx = willekeurig(-GRENS_X * 0.6, GRENS_X * 0.6), cy = willekeurig(-GRENS_Y * 0.5, GRENS_Y * 0.6);
+    for (let i = 0; i < 5; i++) {
+      const d = i - 2;
+      plan(t, () => nieuweVijand('jager', maakJager(), cx + d * 3.2, cy + Math.abs(d) * 0.8, -300 - Math.abs(d) * 8, { doelZ: willekeurig(-85, -55), basisX: cx + d * 3.2, basisY: cy + Math.abs(d) * 0.8, fase2: Math.random() * 6 }));
+    }
+  }
+  function groepJagersRij(t) {
+    const links = Math.random() < 0.5;
+    for (let i = 0; i < 4; i++) {
+      const x = (links ? -1 : 1) * (GRENS_X * 0.9 - i * 2.6), y = willekeurig(-GRENS_Y * 0.6, GRENS_Y * 0.7);
+      plan(t + i * 14, () => nieuweVijand('jager', maakJager(), x * 2.2, y + 6, -280, { doelZ: willekeurig(-90, -60), basisX: x, basisY: y, fase2: i }));
+    }
+  }
+  function groepAsteroiden(t) {
+    const n = 7 + Math.min(8, golf);
+    for (let i = 0; i < n; i++) {
+      plan(t + i * 12, () => {
+        const maat = Math.random() < 0.45 ? 'groot' : Math.random() < 0.6 ? 'middel' : 'klein';
+        nieuweVijand(maat, maakAsteroide(maat), willekeurig(-GRENS_X * 1.15, GRENS_X * 1.15), willekeurig(-GRENS_Y * 1.1, GRENS_Y * 1.1), -300 - Math.random() * 40,
+          { vz: wereldSnelheid * willekeurig(0.9, 1.35), draai: new THREE.Vector3(Math.random(), Math.random(), Math.random()).multiplyScalar(0.03), drift: new THREE.Vector2(willekeurig(-0.02, 0.02), willekeurig(-0.02, 0.02)) });
+      });
+    }
+  }
+  function groepMijnen(t) {
+    for (let i = 0; i < 6; i++)
+      plan(t + i * 18, () => nieuweVijand('mijn', maakMijn(), willekeurig(-GRENS_X, GRENS_X), willekeurig(-GRENS_Y, GRENS_Y), -300, { vz: 0.85 + golf * 0.02 }));
+  }
+  function groepKruiser(t) {
+    plan(t, () => nieuweVijand('kruiser', maakKruiser(), willekeurig(-GRENS_X * 0.6, GRENS_X * 0.6), willekeurig(-1, GRENS_Y * 0.7), -320, { doelZ: -125, basisX: 0, basisY: 0 }));
+  }
+
+  /* ── Moederschip ─────────────────────────── */
+  const BAAS_SCHAAL = 1.3;   // het moederschip is groter getekend; de raakgebieden schalen mee
+  function maakBaas(nr) {
+    const g = new THREE.Group();
+    const rompKleur = [0xf43f5e, 0xa855f7, 0xf97316, 0x10b981][(nr - 1) % 4];
+    const hoofd = neonDeel(new THREE.CylinderGeometry(9, 13, 6, 8), rompKleur, { vul: 0x1a0820, sterkte: 2 });
+    hoofd.rotation.x = Math.PI / 2; g.add(hoofd);
+    const vleugelGeo = new THREE.BoxGeometry(26, 1.6, 7);
+    for (const s of [-1, 1]) {
+      const v = neonDeel(vleugelGeo, rompKleur, { vul: 0x1a0820, sterkte: 2 }); v.position.set(s * 19, -1, 1); v.rotation.z = s * -0.12; g.add(v);
+      const p = neonDeel(new THREE.BoxGeometry(3, 7, 9), rompKleur, { vul: 0x1a0820, sterkte: 2 }); p.position.set(s * 32, 0, 0); g.add(p);
+    }
+    const toren = neonDeel(new THREE.BoxGeometry(5, 5, 4), rompKleur, { vul: 0x1a0820, sterkte: 2 }); toren.position.set(0, 6, -1); g.add(toren);
+    for (let i = 0; i < 8; i++) { const l = gloed(rompKleur, 2.5); const a = i / 8 * Math.PI * 2; l.position.set(Math.cos(a) * 12, Math.sin(a) * 4, -3.5); g.add(l); }
+
+    const delen = [];
+    const maakDeel = (soort, x, y, z, hp) => {
+      let obj;
+      if (soort === 'toren') {
+        obj = new THREE.Group();
+        obj.add(neonDeel(new THREE.CylinderGeometry(1.6, 2, 1.6, 8), 0xfacc15, { vul: 0x221a05 }));
+        const loop = neonDeel(new THREE.BoxGeometry(0.5, 0.5, 3.2), 0xfacc15, { vul: 0x221a05 }); loop.position.set(0, 0.6, 1.8); obj.add(loop);
+      } else if (soort === 'generator') {
+        obj = new THREE.Group();
+        obj.add(neonDeel(new THREE.IcosahedronGeometry(2.4, 1), 0x38bdf8, { vul: 0x06202e }));
+        const r = new THREE.Mesh(new THREE.TorusGeometry(3.4, 0.16, 8, 48), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.5, 1.6, 2.6), toneMapped: false }));
+        obj.add(r); obj.userData.ring = r;
+        obj.add(gloed(0x38bdf8, 7));
+      } else {
+        obj = new THREE.Group();
+        const kern = new THREE.Mesh(new THREE.IcosahedronGeometry(3, 2), new THREE.MeshStandardMaterial({ color: 0x220000, emissive: 0xff5a1f, emissiveIntensity: 2.4, roughness: 0.3 }));
+        obj.add(kern, gloed(0xff7b2e, 12));
+        const schildBel = new THREE.Mesh(new THREE.SphereGeometry(5.2, 32, 16), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.3, 0.8, 2.2), transparent: true, opacity: 0.32, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+        obj.add(schildBel); obj.userData.schildBel = schildBel; obj.userData.kern = kern;
+      }
+      obj.position.set(x, y, z);
+      g.add(obj);
+      const d = { soort, obj, hp: hp * (1 + (nr - 1) * 0.45), max: hp * (1 + (nr - 1) * 0.45), r: (soort === 'kern' ? 4.2 : soort === 'generator' ? 3.2 : 2.4) * BAAS_SCHAAL, kapot: false, flits: 0, vuur: willekeurig(40, 120) };
+      delen.push(d);
+      return d;
+    };
+    for (const [x, y] of [[-22, 1.5], [22, 1.5], [-11, -4], [11, -4]]) maakDeel('toren', x, y, 4.5, 34);
+    for (const s of [-1, 1]) maakDeel('generator', s * 32, 0, 5.5, 55);
+    const kern = maakDeel('kern', 0, -0.5, 6, 170);
+
+    g.position.set(0, 4, -620);
+    g.scale.setScalar(BAAS_SCHAAL);
+    scene.add(g);
+    baas = {
+      nr, obj: g, delen, kern, t: 0, binnen: false, dood: false, sterf: 0, schildWeg: false, kleur: rompKleur,
+      maxHp: delen.reduce((s, d) => s + d.max, 0),
+      totaalHp() { return this.delen.reduce((s, d) => s + Math.max(0, d.hp), 0); },
+      rompBollen: [[0, 0, 0, 11], [-19, -1, 1, 6], [19, -1, 1, 6], [-32, 0, 0, 4.5], [32, 0, 0, 4.5]],
+    };
+  }
+  const tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3();
+  function wereldPos(obj, uit = tmpV) { return obj.getWorldPosition(uit); }
+
+  function raakDeel(d, dmg, pos) {
+    if (d.kapot || !baas || baas.dood) return false;
+    if (d.soort === 'kern' && !baas.schildWeg) { vonken(pos, 0x7dd3fc, 5); sfx('blok'); return true; }
+    d.hp -= dmg; d.flits = 4;
+    vonken(pos, d.soort === 'generator' ? 0x7dd3fc : 0xfacc15, 4);
+    sfx('raak');
+    if (d.hp <= 0) {
+      d.kapot = true;
+      const p = wereldPos(d.obj, new THREE.Vector3());
+      explosie(p, d.soort === 'generator' ? 0x38bdf8 : 0xfacc15, d.soort === 'kern' ? 6 : 3.2);
+      schud(1.2); sfx('grootBoem');
+      punten(d.soort === 'generator' ? 1500 : d.soort === 'toren' ? 800 : 0, p);
+      if (d.soort !== 'kern') { d.obj.visible = false; d.obj.scale.setScalar(0.001); }
+      if (d.soort === 'generator' && baas.delen.every(x => x.soort !== 'generator' || x.kapot)) {
+        baas.schildWeg = true;
+        const bel = baas.kern.obj.userData.schildBel;
+        explosie(wereldPos(baas.kern.obj, new THREE.Vector3()), 0x38bdf8, 4);
+        bel.visible = false;
+        zetBanner('SCHILD WEG!', 'Schiet op de gloeiende kern!', '#38bdf8', 130);
+        sfx('schildWeg');
+      }
+      if (d.soort === 'kern') { baas.dood = true; baas.sterf = 0; vijandKogels.forEach(k => verwijder(k.obj)); vijandKogels = []; }
+    }
+    return true;
+  }
+
+  function updateBaas(ts) {
+    const b = baas; b.t += ts;
+    if (!b.binnen) {
+      b.obj.position.z += Math.max(0.6, (-112 - b.obj.position.z) * 0.035) * ts;   // snel binnen, dan afremmen
+      if (b.obj.position.z > -114) { b.binnen = true; warpDoel = 0; schud(1); zetBanner('MOEDERSCHIP ' + b.nr, 'Vernietig de schildgeneratoren', '#fb7185', 150); }
+      return;
+    }
+    if (b.dood) {
+      b.sterf += ts;
+      if (Math.floor(b.sterf) % 5 === 0 && Math.floor(b.sterf - ts) % 5 !== 0) {
+        const p = tmpV2.set(willekeurig(-30, 30), willekeurig(-6, 6), willekeurig(-3, 6)).add(b.obj.position);
+        explosie(p, Math.random() < 0.5 ? b.kleur : 0xffb347, 2.4); schud(0.8); sfx('boem');
+      }
+      b.obj.rotation.z += 0.002 * ts;
+      b.obj.position.y -= 0.03 * ts;
+      if (b.sterf > 170) {
+        const p = b.obj.position.clone();
+        for (let i = 0; i < 3; i++) explosie(p.clone().add(new THREE.Vector3(willekeurig(-15, 15), willekeurig(-4, 4), 0)), i ? b.kleur : 0xffffff, 10);
+        for (let i = 0; i < 5; i++) schokgolf(p, i % 2 ? b.kleur : 0xffffff, 28 + i * 14, 60 + i * 12);
+        flitsLicht(p, 0xffffff, 400);
+        flitsScherm(0.95); schud(3.5); sfx('megaBoem');
+        slowmo = 75;
+        stats.kills++;
+        punten(10000 * b.nr, p);
+        for (const s of ['wapen', 'raket', 'schild']) laatVallen(p.clone().add(new THREE.Vector3(willekeurig(-6, 6), willekeurig(-3, 3), 20)), s);
+        scene.remove(b.obj);
+        baas = null;
+      }
+      return;
+    }
+    b.obj.position.x = Math.sin(b.t * 0.0045) * Math.min(14, GRENS_X * 1.3);
+    b.obj.position.y = 4 + Math.sin(b.t * 0.007) * 3;
+    b.obj.rotation.z = Math.sin(b.t * 0.0045) * -0.06;
+    const tempo = 1 + (b.nr - 1) * 0.15;
+    for (const d of b.delen) {
+      if (d.kapot) continue;
+      if (d.flits > 0) d.flits -= ts;
+      if (d.soort === 'generator') { d.obj.userData.ring.rotation.x += 0.03 * ts; d.obj.userData.ring.rotation.y += 0.02 * ts; }
+      if (d.soort === 'toren') {
+        d.vuur -= ts;
+        if (d.vuur <= 0) { const p = wereldPos(d.obj); schietOpSpeler(p, 2.1 * tempo, 'baas', 0.04); d.vuur = Math.max(38, 80 - b.nr * 6) + Math.random() * 30; }
+      }
+    }
+    // generatoren actief: het moederschip lanceert jagers
+    if (!b.schildWeg && Math.floor(b.t) % 420 === 0 && Math.floor(b.t - ts) % 420 !== 0)
+      for (let i = -1; i <= 1; i++) nieuweVijand('jager', maakJager(), b.obj.position.x + i * 8, b.obj.position.y - 3, b.obj.position.z + 8, { doelZ: willekeurig(-80, -55), basisX: i * GRENS_X * 0.6, basisY: willekeurig(-GRENS_Y * 0.5, GRENS_Y * 0.5), fase2: i });
+    // schild weg: de kern vuurt kogelringen
+    const kern = b.kern.obj;
+    kern.userData.kern.rotation.y += 0.02 * ts;
+    if (b.schildWeg) {
+      kern.userData.kern.material.emissiveIntensity = 2.4 + Math.sin(b.t * 0.25) * 1.2;
+      if (Math.floor(b.t) % 85 === 0 && Math.floor(b.t - ts) % 85 !== 0) {
+        const p = wereldPos(kern);
+        const n = 14;
+        for (let i = 0; i < n; i++) {
+          const a = i / n * Math.PI * 2 + b.t * 0.01;
+          const doel = tmpV2.set(speler.x + Math.cos(a) * 7, speler.y + Math.sin(a) * 4.5, 0);
+          vijandKogel(p, doel, 1.7 * tempo, 'baas');
+        }
+      }
+    }
+  }
+
+  /* ── Kogels en raketten ──────────────────── */
+  const laserMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.4, 2.6, 3.2), toneMapped: false });
+  const vijandLaserMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(3.2, 0.4, 1.4), toneMapped: false });
+  const baasKogelMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(3.4, 1.4, 0.3), toneMapped: false });
+  const raketMat = new THREE.MeshStandardMaterial({ color: 0x334155, emissive: 0xfb923c, emissiveIntensity: 2 });
+  const powerupKleuren = { wapen: 0x4ade80, raket: 0xfb923c, schild: 0x38bdf8, overdrive: 0xe879f9 };
+  const powerupNamen = { wapen: 'DUBBELE LASER', raket: '+3 RAKETTEN', schild: 'SCHILD HERSTELD', overdrive: 'OVERDRIVE!' };
+
+  function verwijder(obj) { scene.remove(obj); }
+
+  // De lasers vliegen in de richting van de camera door het schip: wat je op het scherm
+  // achter je schip ziet, raak je. Zo is ook een groot moederschip overal te raken.
+  const kijkRichting = new THREE.Vector3();
+  function richtLijn() { return kijkRichting.set(speler.x, speler.y, 0).sub(camera.position).normalize(); }
+  function vuurLaser() {
+    const s = speler;
+    const r = richtLijn();
+    const posities = s.dubbel > 0 ? [[-0.95, 0, -0.02], [0.95, 0, 0.02], [0, 0.2, 0]] : [[-0.9, 0, 0], [0.9, 0, 0]];
+    for (const [dx, dy, hoek] of posities) {
+      const m = new THREE.Mesh(GEO.laser, laserMat);
+      m.position.set(s.x + dx, s.y + dy, -1.5);
+      const v = r.clone().multiplyScalar(5.4);
+      v.x += hoek * 5;
+      m.lookAt(tmpV.copy(m.position).add(v));
+      scene.add(m);
+      kogels.push({ obj: m, v, oud: m.position.clone() });
+    }
+    sfx('laser');
+  }
+  // kortste afstand (in het kwadraat) van punt c tot het lijnstuk a-b
+  const _ab = new THREE.Vector3(), _ac = new THREE.Vector3();
+  function lijnstukAfstand2(a, b, c) {
+    _ab.subVectors(b, a); _ac.subVectors(c, a);
+    const t = THREE.MathUtils.clamp(_ac.dot(_ab) / Math.max(1e-6, _ab.lengthSq()), 0, 1);
+    return _ac.sub(_ab.multiplyScalar(t)).lengthSq();
+  }
+  function vijandKogel(van, naar, snelheid, soort = 'vijand') {
+    if (vijandKogels.length > 260) return;
+    const m = new THREE.Mesh(soort === 'baas' ? GEO.baasKogel : GEO.vijandLaser, soort === 'baas' ? baasKogelMat : vijandLaserMat);
+    m.position.copy(van);
+    m.lookAt(naar);
+    // eigen vector: `van` en `naar` kunnen gedeelde hulpvectoren zijn
+    const v = new THREE.Vector3().subVectors(naar, van).normalize().multiplyScalar(snelheid);
+    scene.add(m);
+    vijandKogels.push({ obj: m, v, soort, r: soort === 'baas' ? 0.8 : 0.5 });
+  }
+  function schietOpSpeler(van, snelheid, soort = 'vijand', spreiding = 0) {
+    if (speler.dood || van.z < -260 || van.z > -10) return;
+    // een eigen vector: `van` is vaak de gedeelde hulpvector tmpV
+    const doel = new THREE.Vector3(speler.x + speler.vx * 18 + willekeurig(-1, 1) * spreiding * 40, speler.y + speler.vy * 18 + willekeurig(-1, 1) * spreiding * 30, 0);
+    vijandKogel(van, doel, snelheid, soort);
+    sfx('vijandLaser');
+  }
+  function lanceerRaket() {
+    const s = speler;
+    if (toestand !== 'spelen' || s.dood || s.raketten <= 0) return;
+    s.raketten--;
+    stats.raketten++;
+    for (const kant of [-1, 1]) {
+      const m = new THREE.Mesh(GEO.raket, raketMat);
+      m.position.set(s.x + kant * 1.4, s.y - 0.3, -0.5);
+      scene.add(m);
+      raketten.push({ obj: m, v: new THREE.Vector3(kant * 0.4, 0.15, -1.2), doel: null, leven: 240 });
+    }
+    sfx('raket');
+  }
+  function zoekDoel(pos) {
+    let beste = null, bd = Infinity;
+    for (const v of vijanden) {
+      if (v.dood || v.obj.position.z > pos.z - 3 || v.obj.position.z < -260) continue;
+      const d = v.obj.position.distanceToSquared(pos) * (v.soort === 'kruiser' ? 0.4 : 1);
+      if (d < bd) { bd = d; beste = { v }; }
+    }
+    if (baas && baas.binnen && !baas.dood) {
+      for (const d of baas.delen) {
+        if (d.kapot || (d.soort === 'kern' && !baas.schildWeg)) continue;
+        const p = wereldPos(d.obj, new THREE.Vector3());
+        const afst = p.distanceToSquared(pos) * 0.3;
+        if (afst < bd) { bd = afst; beste = { deel: d }; }
+      }
+    }
+    return beste;
+  }
+
+  /* ── Effecten, punten en schade ──────────── */
+  function schud(k) { schok = Math.min(4, Math.max(schok, k)); }
+  function punten(p, pos) {
+    if (!p) return;
+    combo.n++; combo.timer = 120;
+    const oud = combo.mult;
+    combo.mult = Math.min(8, 1 + Math.floor(combo.n / 6));
+    combo.best = Math.max(combo.best, combo.mult);
+    if (combo.mult > oud) sfx('combo');
+    score += p * combo.mult;
+  }
+  function laatVallen(pos, soort) {
+    if (!soort) { const o = ['wapen', 'wapen', 'raket', 'raket', 'schild', 'overdrive']; soort = o[Math.floor(Math.random() * o.length)]; }
+    const kleur = powerupKleuren[soort];
+    const g = neonDeel(GEO.powerup, kleur, { vul: 0x0b0b1a, sterkte: 3 });
+    g.add(gloed(kleur, 4.5));
+    g.position.copy(pos);
+    scene.add(g);
+    powerups.push({ obj: g, soort });
+  }
+  function pakPowerup(p) {
+    const s = speler;
+    sfx('powerup');
+    schokgolf(p.obj.position, powerupKleuren[p.soort], 5, 22);
+    if (p.soort === 'wapen') s.dubbel = 900;
+    else if (p.soort === 'raket') s.raketten = Math.min(12, s.raketten + 3);
+    else if (p.soort === 'schild') s.schild = 100;
+    else if (p.soort === 'overdrive') s.overdrive = 480;
+    zetBanner(powerupNamen[p.soort], '', '#' + powerupKleuren[p.soort].toString(16).padStart(6, '0'), 60);
+  }
+  function raakVijand(v, dmg, pos) {
+    if (v.dood) return;
+    v.hp -= dmg; v.flits = 4;
+    vonken(pos, SOORTEN[v.soort].kleur, 4);
+    sfx('raak');
+    if (v.hp <= 0) vijandDood(v);
+  }
+  function vijandDood(v, metPunten = true) {
+    v.dood = true;
+    const s = SOORTEN[v.soort], p = v.obj.position;
+    if (metPunten) { stats.kills++; punten(s.punten, p); }
+    const groot = v.soort === 'kruiser' ? 5 : v.soort === 'groot' ? 2.2 : v.soort === 'mijn' ? 2 : v.soort === 'jager' ? 1.4 : 1;
+    explosie(p, v.soort === 'groot' || v.soort === 'middel' || v.soort === 'klein' ? 0xc8a46b : s.kleur, groot);
+    schud(groot * 0.25);
+    sfx(groot >= 4 ? 'grootBoem' : 'boem');
+    if (v.soort === 'groot' && metPunten) for (const k of [-1, 1]) nieuweVijand('middel', maakAsteroide('middel'), p.x + k * 1.5, p.y, p.z, { vz: v.vz, draai: v.draai.clone(), drift: new THREE.Vector2(k * 0.06, willekeurig(-0.03, 0.03)) });
+    if (v.soort === 'middel' && metPunten) for (const k of [-1, 1]) nieuweVijand('klein', maakAsteroide('klein'), p.x + k, p.y, p.z, { vz: v.vz, draai: v.draai.clone(), drift: new THREE.Vector2(k * 0.07, willekeurig(-0.04, 0.04)) });
+    // een mijn neemt alles in de buurt mee: kettingreacties!
+    if (v.soort === 'mijn') for (const w of vijanden) if (!w.dood && w !== v && w.obj.position.distanceTo(p) < 9) raakVijand(w, 6, w.obj.position);
+    if (metPunten && Math.random() < s.drop) laatVallen(p.clone());
+    verwijder(v.obj);
+  }
+  function spelerGeraakt(schade) {
+    const s = speler;
+    if (s.inv > 0 || s.rol > 0 || s.dood) return;
+    s.schild -= schade;
+    s.sindsSchade = 0;
+    s.inv = 20;
+    combo.n = 0; combo.mult = 1; combo.timer = 0;
+    schud(1.2); flitsScherm(0.18);
+    s.obj.userData.schild.material.opacity = 0.9;
+    sfx('geraakt');
+    if (s.schild <= 0) {
+      s.levens--;
+      explosie(s.obj.position, 0x22d3ee, 6);
+      flitsScherm(0.6); schud(3); sfx('leven');
+      s.obj.visible = false;
+      s.dubbel = 0; s.overdrive = 0;
+      if (s.levens <= 0) { s.dood = true; eindTimer = 150; }
+      else { s.respawn = 90; s.dood = true; }
+    }
+  }
+  function gameOver() {
+    zetToestand('over');
+    sfx('gameover');
+    nieuwRecordGezet = score > record;
+    if (nieuwRecordGezet) { record = Math.floor(score); recordOpslag.bewaar(record); }
+    $('nieuwRecord').textContent = nieuwRecordGezet && score > 0 ? '★ NIEUW RECORD! ★' : '';
+    $('eindStats').innerHTML = [['Score', getal(score)], ['Golf bereikt', golf], ['Vijanden vernietigd', stats.kills], ['Raketten afgevuurd', stats.raketten], ['Hoogste combo', '×' + combo.best], ['Record', getal(record)]]
+      .map(([k, v]) => `<div>${k}</div><div>${v}</div>`).join('');
+  }
+
+  /* ════════════════════════════════════════════════════════════
+     Update (vaste stap van 1/60 s; ts < 1 tijdens slow motion)
+  ════════════════════════════════════════════════════════════ */
+  const toetsen = {};
+  let doel = null, veeg = null;
+
+  function updateSpeler(ts) {
+    const s = speler;
+    if (s.dood) {
+      if (s.levens > 0 && s.respawn > 0 && (s.respawn -= ts) <= 0) {
+        s.dood = false; s.obj.visible = true; s.schild = 100; s.inv = 150; s.x = 0; s.y = 0; s.vx = s.vy = 0;
+        schokgolf(s.obj.position.set(0, 0, 0), 0x22d3ee, 8, 30);
+      }
+      return;
+    }
+    const kx = (toetsen.arrowright || toetsen.d ? 1 : 0) - (toetsen.arrowleft || toetsen.a ? 1 : 0);
+    const ky = (toetsen.arrowup || toetsen.w ? 1 : 0) - (toetsen.arrowdown || toetsen.s ? 1 : 0);
+    let nvx, nvy;
+    if (kx || ky) { doel = null; nvx = kx * 0.42; nvy = ky * 0.42; }
+    else if (doel) { nvx = THREE.MathUtils.clamp((doel.x - s.x) * 0.16, -0.75, 0.75); nvy = THREE.MathUtils.clamp((doel.y - s.y) * 0.16, -0.75, 0.75); }
+    else { nvx = 0; nvy = 0; }
+    s.vx += (nvx - s.vx) * 0.35 * ts; s.vy += (nvy - s.vy) * 0.35 * ts;
+    s.x = THREE.MathUtils.clamp(s.x + s.vx * ts, -GRENS_X, GRENS_X);
+    s.y = THREE.MathUtils.clamp(s.y + s.vy * ts, -GRENS_Y, GRENS_Y);
+    s.obj.position.set(s.x, s.y, 0);
+    // kantelen in de bochten, en een volle rol bij het ontwijken
+    if (s.rol > 0) s.rol -= ts;
+    if (s.rolKoel > 0) s.rolKoel -= ts;
+    const rolHoek = s.rol > 0 ? (1 - s.rol / 36) * Math.PI * 2 * s.rolRichting : 0;
+    s.obj.rotation.set(s.vy * 0.5, -s.vx * 0.25, -s.vx * 1.1 + rolHoek);
+    if (s.inv > 0) s.inv -= ts;
+    s.obj.visible = !(s.inv > 20 && Math.floor(s.inv / 4) % 2);
+    const sch = s.obj.userData.schild.material;
+    sch.opacity = Math.max(s.rol > 0 ? 0.35 : 0, sch.opacity - 0.04 * ts);
+    // motorvlammen flakkeren
+    for (const k of [-1, 1]) s.obj.userData['vlam' + k].scale.setScalar(1.3 + Math.random() * 0.6 + (s.overdrive > 0 ? 0.6 : 0));
+    if (Math.random() < 0.7 * ts) for (const k of [-0.9, 0.9]) deeltje(s.x + k, s.y, 2.2, willekeurig(-0.02, 0.02), willekeurig(-0.02, 0.02), 0.25, s.overdrive > 0 ? 0xe879f9 : 0x22d3ee, 0.7, 16, 0.97);
+    // schild laadt langzaam bij
+    s.sindsSchade += ts;
+    if (s.sindsSchade > 200 && s.schild < 100) s.schild = Math.min(100, s.schild + 0.035 * ts);
+    if (s.dubbel > 0) s.dubbel -= ts;
+    if (s.overdrive > 0) s.overdrive -= ts;
+    s.vuur -= ts;
+    if (s.vuur <= 0) { vuurLaser(); s.vuur = s.overdrive > 0 ? 3 : 6; }
+    vizier.position.copy(s.obj.position).addScaledVector(richtLijn(), 60);   // vizier op de schietlijn
+  }
+
+  function updateVijand(v, ts) {
+    v.t += ts;
+    const o = v.obj, p = o.position, s = v.soort;
+    if (v.flits > 0) {
+      v.flits -= ts;
+      const wit = v.flits > 0;   // even wit oplichten, daarna terug naar de eigen kleur
+      o.traverse(c => { const m = c.userData.lijnMat; if (m) wit ? m.color.setScalar(3) : m.color.copy(c.userData.basisKleur); });
+      if (s === 'groot' || s === 'middel' || s === 'klein') o.material.emissive.setScalar(v.flits > 0 ? 0.6 : 0);
+    }
+    if (s === 'jager') {
+      if (v.fase === 'nadering') {
+        p.z += (v.doelZ - p.z) * 0.035 * ts + 0.6 * ts;
+        p.x += (v.basisX - p.x) * 0.03 * ts; p.y += (v.basisY - p.y) * 0.03 * ts;
+        if (p.z >= v.doelZ - 2) v.fase = 'gevecht';
+        o.rotation.set(0, 0, Math.sin(v.t * 0.1) * 0.3);
+      } else if (v.fase === 'gevecht') {
+        p.x = v.basisX + Math.sin(v.t * 0.025 + v.fase2) * Math.min(6, GRENS_X * 0.6);
+        p.y = v.basisY + Math.cos(v.t * 0.018 + v.fase2) * 2.2;
+        p.z = v.doelZ + Math.sin(v.t * 0.02) * 6;
+        o.rotation.z = -Math.cos(v.t * 0.025 + v.fase2) * 0.6;
+        v.vuur -= ts;
+        if (v.vuur <= 0) { schietOpSpeler(p, 1.9 + golf * 0.06); v.vuur = Math.max(60, 150 - golf * 8) + Math.random() * 60; }
+        if (v.t > 520 + v.fase2 * 40) { v.fase = 'duik'; v.duikDoel = new THREE.Vector3(speler.x, speler.y, 30); }
+      } else {
+        const r = tmpV.copy(v.duikDoel).sub(p).normalize().multiplyScalar(1.9);
+        p.addScaledVector(r, ts);
+        o.lookAt(v.duikDoel);
+      }
+    } else if (s === 'kruiser') {
+      if (v.fase === 'nadering') { p.z += (v.doelZ - p.z) * 0.02 * ts + 0.35 * ts; if (p.z >= v.doelZ - 1) { v.fase = 'gevecht'; v.t = 0; } }
+      else if (v.fase === 'gevecht') {
+        p.x += Math.sin(v.t * 0.008) * 0.05 * ts;
+        v.vuur -= ts;
+        if (v.vuur <= 0) {
+          for (let i = -2; i <= 2; i++) { const d = tmpV2.set(speler.x + i * 3.2, speler.y + Math.abs(i) * 0.6, 0); vijandKogel(tmpV.copy(p).add(new THREE.Vector3(i * 1.4, 0, 3)), d, 1.6 + golf * 0.03, 'baas'); }
+          sfx('vijandLaser');
+          v.vuur = Math.max(80, 130 - golf * 4);
+        }
+        if (v.t > 900) v.fase = 'vertrek';
+      } else { p.y += 0.12 * ts; p.z -= 0.8 * ts; if (p.z < -330) { v.dood = true; verwijder(o); } }
+    } else if (s === 'mijn') {
+      p.z += v.vz * ts;
+      if (p.z > -70) { p.x += (speler.x - p.x) * 0.012 * ts; p.y += (speler.y - p.y) * 0.012 * ts; }
+      o.rotation.x += 0.02 * ts; o.rotation.y += 0.03 * ts;
+      o.userData.licht.scale.setScalar(2 + Math.sin(v.t * (p.z > -40 ? 0.5 : 0.15)) * 1);
+      if (!speler.dood && p.z > -4 && Math.hypot(p.x - speler.x, p.y - speler.y) < 3.6) { vijandDood(v, false); spelerGeraakt(28); return; }
+    } else {
+      // asteroïde
+      p.z += v.vz * ts;
+      p.x += v.drift.x * ts; p.y += v.drift.y * ts;
+      o.rotation.x += v.draai.x * ts; o.rotation.y += v.draai.y * ts; o.rotation.z += v.draai.z * ts;
+    }
+    // botsing met het schip als het object langs het vlak van de speler komt
+    if (!v.dood && !speler.dood && s !== 'mijn' && Math.abs(p.z) < v.r + 1 && Math.hypot(p.x - speler.x, p.y - speler.y) < v.r * 0.85 + 1) {
+      spelerGeraakt(s === 'groot' ? 34 : s === 'kruiser' ? 60 : s === 'middel' ? 20 : 12);
+      if (s !== 'kruiser') vijandDood(v, false);
+    }
+    if (!v.dood && p.z > 26) { v.dood = true; verwijder(o); }
+  }
+
+  function updateSpel(ts) {
+    golfTijd += ts;
+    while (wachtrij.length && wachtrij[0].t <= golfTijd) wachtrij.shift().actie();
+    updateSpeler(ts);
+
+    // lasers van de speler: test het hele lijnstuk van deze stap, zodat niets ertussendoor glipt
+    for (const k of kogels) {
+      const p = k.obj.position;
+      k.oud.copy(p);
+      p.addScaledVector(k.v, ts);
+      for (const v of vijanden) {
+        if (v.dood) continue;
+        const r = v.r + 0.25;
+        if (lijnstukAfstand2(k.oud, p, v.obj.position) < r * r) { raakVijand(v, 1, p); k.weg = true; break; }
+      }
+      if (!k.weg && baas && baas.binnen && !baas.dood) {
+        for (const d of baas.delen) {
+          if (d.kapot) continue;
+          if (lijnstukAfstand2(k.oud, p, wereldPos(d.obj)) < d.r * d.r) { raakDeel(d, 1, p); k.weg = true; break; }
+        }
+        if (!k.weg) for (const [bx, by, bz, br] of baas.rompBollen) {
+          const bp = tmpV2.set(bx, by, bz).applyMatrix4(baas.obj.matrixWorld), rr = br * BAAS_SCHAAL;
+          if (lijnstukAfstand2(k.oud, p, bp) < rr * rr) { vonken(p, baas.kleur, 2); k.weg = true; break; }
+        }
+      }
+      if (p.z < -330 || Math.abs(p.x) > 200 || Math.abs(p.y) > 140) k.weg = true;
+      if (k.weg) verwijder(k.obj);
+    }
+    kogels = kogels.filter(k => !k.weg);
+
+    // raketten zoeken zelf hun doel
+    for (const r of raketten) {
+      r.leven -= ts;
+      if (!r.doel || (r.doel.v && r.doel.v.dood) || (r.doel.deel && r.doel.deel.kapot)) r.doel = zoekDoel(r.obj.position);
+      const doelPos = r.doel ? (r.doel.v ? r.doel.v.obj.position : wereldPos(r.doel.deel.obj, new THREE.Vector3())) : null;
+      if (doelPos) { const gewenst = tmpV.copy(doelPos).sub(r.obj.position).normalize().multiplyScalar(2.6); r.v.lerp(gewenst, 0.09 * ts); }
+      else r.v.z -= 0.05 * ts;
+      r.obj.position.addScaledVector(r.v, ts);
+      r.obj.lookAt(tmpV2.copy(r.obj.position).add(r.v)); r.obj.rotateX(Math.PI / 2);
+      deeltje(r.obj.position.x, r.obj.position.y, r.obj.position.z, willekeurig(-0.03, 0.03), willekeurig(-0.03, 0.03), 0.1, Math.random() < 0.5 ? 0xfb923c : 0xfde68a, 0.9, 22, 0.94);
+      if (doelPos && r.obj.position.distanceTo(doelPos) < (r.doel.deel ? r.doel.deel.r : r.doel.v.r) + 0.6) {
+        explosie(r.obj.position, 0xfb923c, 1.6);
+        if (r.doel.v) raakVijand(r.doel.v, 12, r.obj.position); else raakDeel(r.doel.deel, 14, r.obj.position);
+        r.weg = true;
+      }
+      if (r.leven <= 0 || r.obj.position.z < -340) r.weg = true;
+      if (r.weg) verwijder(r.obj);
+    }
+    raketten = raketten.filter(r => !r.weg);
+
+    for (const v of vijanden) if (!v.dood) updateVijand(v, ts);
+    vijanden = vijanden.filter(v => !v.dood);
+    if (baas) updateBaas(ts);
+
+    // vijandelijke kogels: raken ze het schip in het vlak z = 0?
+    for (const k of vijandKogels) {
+      const p = k.obj.position, oudZ = p.z;
+      p.addScaledVector(k.v, ts);
+      if (!speler.dood && oudZ < 0.5 && p.z >= -0.5) {
+        const f = k.v.z ? THREE.MathUtils.clamp((0 - oudZ) / (p.z - oudZ), 0, 1) : 0;
+        const x = p.x - k.v.x * ts * (1 - f), y = p.y - k.v.y * ts * (1 - f);
+        if (Math.hypot(x - speler.x, y - speler.y) < 1.05 + k.r) {
+          if (speler.rol > 0) { vonken(p, 0xa78bfa, 6); sfx('blok'); }
+          else spelerGeraakt(k.soort === 'baas' ? 16 : 11);
+          k.weg = true;
+        }
+      }
+      if (p.z > 24 || Math.abs(p.x) > 120 || Math.abs(p.y) > 80) k.weg = true;
+      if (k.weg) verwijder(k.obj);
+    }
+    vijandKogels = vijandKogels.filter(k => !k.weg);
+
+    for (const p of powerups) {
+      const o = p.obj.position;
+      o.z += 0.7 * ts;
+      p.obj.rotation.y += 0.05 * ts; p.obj.rotation.x += 0.03 * ts;
+      if (!speler.dood && o.z > -18) { o.x += (speler.x - o.x) * 0.06 * ts; o.y += (speler.y - o.y) * 0.06 * ts; }
+      if (!speler.dood && o.z > -2 && Math.hypot(o.x - speler.x, o.y - speler.y) < 2.6) { p.weg = true; pakPowerup(p); }
+      if (o.z > 22) p.weg = true;
+      if (p.weg) verwijder(p.obj);
+    }
+    powerups = powerups.filter(p => !p.weg);
+
+    if (combo.timer > 0 && (combo.timer -= ts) <= 0) { combo.n = 0; combo.mult = 1; }
+
+    if (!golfKlaar && golfTijd > 60 && !wachtrij.length && !vijanden.length && !baas) {
+      golfKlaar = true; golfPauze = 130;
+      const bonus = golf * 400;
+      score += bonus;
+      zetBanner('GOLF ' + golf + ' VOLTOOID', '+' + getal(bonus) + ' bonus', '#4ade80', 110);
+    }
+    if (golfKlaar && (golfPauze -= ts) <= 0) startGolf(golf + 1);
+    if (speler.dood && speler.levens <= 0 && (eindTimer -= ts) <= 0) gameOver();
+  }
+
+  function updateWereld(ts) {
+    // sterren
+    const snel = wereldSnelheid * (1 + warp * 9);
+    for (let i = 0; i < STER_N; i++) {
+      sterPos[i * 3 + 2] += snel * 1.4 * ts;
+      if (sterPos[i * 3 + 2] > 30) { sterPos[i * 3 + 2] -= STER_DIEPTE; sterPos[i * 3] = (Math.random() - 0.5) * 300; sterPos[i * 3 + 1] = (Math.random() - 0.5) * 180; }
+    }
+    sterGeo.attributes.position.needsUpdate = true;
+    // warpstrepen bij het binnenkomen van het moederschip
+    warp += (warpDoel - warp) * 0.03 * ts;
+    warpLijnen.material.opacity = Math.min(0.9, warp);
+    if (warp > 0.02) {
+      for (let i = 0; i < WARP_N; i++) {
+        const d = warpData[i];
+        d.z += 9 * warp * ts;
+        if (d.z > 20) zetWarpLijn(d);
+        const l = 4 + warp * 40;
+        warpPos.set([d.x, d.y, d.z, d.x, d.y, d.z - l], i * 6);
+      }
+      warpGeo.attributes.position.needsUpdate = true;
+    }
+    planeet.rotation.y += 0.0004 * ts;
+    koepel.rotation.y += 0.00005 * ts;
+    // schokgolven, lichten en brokstukken
+    for (const m of schokgolven) {
+      if (!m.visible) continue;
+      m.userData.leven -= ts;
+      const p = 1 - m.userData.leven / m.userData.max;
+      m.scale.setScalar(0.2 + p * m.userData.grootte);
+      m.material.opacity = Math.max(0, 1 - p) * 0.9;
+      m.position.z += wereldSnelheid * 0.4 * ts;
+      m.lookAt(camera.position);
+      if (m.userData.leven <= 0) m.visible = false;
+    }
+    for (const l of flitsLichten) if (l.intensity > 0) l.intensity = Math.max(0, l.intensity - l.userData.sterkte * 0.06 * ts);
+    for (const m of brokstukken) {
+      if (!m.visible) continue;
+      const u = m.userData;
+      m.position.addScaledVector(u.v, ts); m.position.z += wereldSnelheid * 0.5 * ts;
+      m.rotation.x += u.draai.x * ts; m.rotation.y += u.draai.y * ts;
+      u.leven -= ts;
+      m.material.emissiveIntensity = Math.max(0, u.leven / 60) * 1.5;
+      if (u.leven <= 0) m.visible = false;
+    }
+    updateDeeltjes(ts);
+  }
+
+  function updateCamera() {
+    const s = speler;
+    let cx, cy, cz, lx, ly, lz;
+    if (toestand === 'menu') {
+      // in het menu cirkelt de camera om het schip
+      const a = tijd * 0.004;
+      cx = Math.sin(a) * 13; cy = 3 + Math.sin(tijd * 0.003) * 2; cz = Math.cos(a) * 13 + 2;
+      lx = 0; ly = 0; lz = -4;
+      s.obj.position.set(0, Math.sin(tijd * 0.02) * 0.4, 0);
+      s.obj.rotation.set(0, 0, Math.sin(tijd * 0.015) * 0.25);
+    } else {
+      cx = s.x * 0.55; cy = s.y * 0.4 + 5.2; cz = CAM_Z;
+      lx = s.x * 0.75; ly = s.y * 0.65 + 2.2; lz = -40;
+    }
+    camera.position.x += (cx - camera.position.x) * 0.12;
+    camera.position.y += (cy - camera.position.y) * 0.12;
+    camera.position.z += (cz - camera.position.z) * 0.12;
+    if (schok > 0.01) { camera.position.x += (Math.random() - 0.5) * schok; camera.position.y += (Math.random() - 0.5) * schok; schok *= 0.88; }
+    camera.lookAt(lx, ly, lz);
+    vizier.visible = toestand === 'spelen' && !s.dood;
+    camera.fov += ((70 + warp * 25) - camera.fov) * 0.08;
+    camera.updateProjectionMatrix();
+  }
+
+  /* ════════════════════════════════════════════════════════════
+     Lus: vaste stap, met slow motion na een vernietigd moederschip
+  ════════════════════════════════════════════════════════════ */
+  const STAP = 1000 / 60;
+  let vorige = null, acc = 0, beeldTijden = [], kwaliteitGecheckt = 0;
+  function frame(nu) {
+    if (vorige === null) vorige = nu;
+    const dt = Math.min(250, nu - vorige);
+    vorige = nu;
+    acc += dt;
+    let n = 0;
+    while (acc >= STAP && n++ < 4) {
+      tijd++;
+      if (toestand !== 'pauze') {
+        tijdSchaal = slowmo > 0 ? 0.3 : 1;
+        if (slowmo > 0) slowmo--;
+        if (toestand === 'spelen') updateSpel(tijdSchaal);
+        updateWereld(tijdSchaal);
+        if (bannerTimer > 0 && --bannerTimer <= 0) $('banner').style.opacity = 0;
+      }
+      acc -= STAP;
+    }
+    if (acc > STAP * 4) acc = 0;
+    updateCamera();
+    if (toestand === 'spelen' || toestand === 'pauze') werkHudBij();
+    composer.render();
+    // automatische kwaliteit: is het te traag, dan een lagere resolutie
+    beeldTijden.push(dt);
+    if (beeldTijden.length > 90) {
+      const gem = beeldTijden.reduce((a, b) => a + b, 0) / beeldTijden.length;
+      beeldTijden = [];
+      if (gem > 24 && pixelRatio > 0.6 && kwaliteitGecheckt < 6) { pixelRatio = Math.max(0.6, pixelRatio - 0.25); kwaliteitGecheckt++; maatAanpassen(); }
+    }
+    requestAnimationFrame(frame);
+  }
+
+  /* ════════════════════════════════════════════════════════════
+     Start, pauze en invoer
+  ════════════════════════════════════════════════════════════ */
+  function ruimOp() {
+    for (const lijst of [vijanden, kogels, vijandKogels, raketten, powerups]) for (const x of lijst) verwijder(x.obj);
+    vijanden = []; kogels = []; vijandKogels = []; raketten = []; powerups = [];
+    if (baas) { scene.remove(baas.obj); baas = null; }
+  }
+  function nieuwSpel() {
+    geluid.start();
+    ruimOp();
+    Object.assign(speler, { x: 0, y: 0, vx: 0, vy: 0, schild: 100, levens: 3, raketten: 3, inv: 120, rol: 0, rolKoel: 0, vuur: 20, dood: false, respawn: 0, sindsSchade: 999, dubbel: 0, overdrive: 0 });
+    speler.obj.visible = true;
+    speler.obj.rotation.set(0, 0, 0);
+    score = 0; combo = { n: 0, timer: 0, mult: 1, best: 1 }; stats = { kills: 0, raketten: 0 };
+    eindTimer = 0; warp = 0; warpDoel = 0; slowmo = 0; doel = null; vorigeHud = '';
+    zetToestand('spelen');
+    startGolf(1);
+  }
+  function rol() {
+    const s = speler;
+    if (toestand !== 'spelen' || s.dood || s.rolKoel > 0) return;
+    s.rol = 36; s.rolKoel = 120; s.rolRichting = s.vx >= 0 ? -1 : 1;
+    sfx('rol');
+  }
+  function pauze(aan) {
+    if (toestand === 'spelen' && aan !== false) { zetToestand('pauze'); for (const k in toetsen) toetsen[k] = false; doel = null; veeg = null; }
+    else if (toestand === 'pauze' && aan !== true) zetToestand('spelen');
+  }
+
+  $('menuBesturing').textContent = aanraak
+    ? 'Sleep om te vliegen · je schiet vanzelf · 🚀 raketten zoeken zelf hun doel · 🌀 rol = even onkwetsbaar'
+    : 'Muis of WASD om te vliegen · je schiet vanzelf · spatie of rechtermuisknop = raket · Shift = rol (even onkwetsbaar)';
+  if (record) $('menuRecord').textContent = 'Record: ' + getal(record);
+  $('startKnop').addEventListener('click', nieuwSpel);
+  $('opnieuwKnop').addEventListener('click', nieuwSpel);
+  $('hervatKnop').addEventListener('click', () => pauze(false));
+
+  window.addEventListener('keydown', e => {
+    const k = e.key.toLowerCase();
+    if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
+    toetsen[k] = true;
+    if (e.repeat) return;
+    geluid.start();
+    if (k === ' ' || k === 'enter') { if (toestand === 'spelen' && k === ' ') lanceerRaket(); else if (toestand === 'menu' || toestand === 'over') nieuwSpel(); else if (toestand === 'pauze') pauze(false); }
+    else if (k === 'shift' || k === 'q' || k === 'e') rol();
+    else if (k === 'p' || k === 'escape') pauze();
+    else if (k === 'm') geluid.wissel();
+  });
+  window.addEventListener('keyup', e => { toetsen[e.key.toLowerCase()] = false; });
+  Arcade.pauzeBijWissel(() => pauze(true));
+
+  // muis: het schip volgt de cursor; vinger: het schip beweegt mee met je veeg
+  function veldPunt(e) {
+    const r = cv.getBoundingClientRect();
+    const nx = ((e.clientX - r.left) / r.width) * 2 - 1, ny = -(((e.clientY - r.top) / r.height) * 2 - 1);
+    return { x: nx * GRENS_X * 1.15, y: ny * GRENS_Y * 1.25 + 1.2 };
+  }
+  cv.addEventListener('contextmenu', e => e.preventDefault());
+  cv.addEventListener('pointerdown', e => {
+    geluid.start();
+    if (toestand !== 'spelen') return;
+    if (e.pointerType === 'mouse') { if (e.button === 2) lanceerRaket(); doel = veldPunt(e); }
+    else { const p = veldPunt(e); veeg = { id: e.pointerId, px: p.x, py: p.y, sx: speler.x, sy: speler.y }; doel = { x: speler.x, y: speler.y }; }
+    try { cv.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+  cv.addEventListener('pointermove', e => {
+    if (toestand !== 'spelen') return;
+    const p = veldPunt(e);
+    if (e.pointerType === 'mouse') doel = p;
+    else if (veeg && veeg.id === e.pointerId) doel = { x: veeg.sx + (p.x - veeg.px) * 1.6, y: veeg.sy + (p.y - veeg.py) * 1.6 };
+  });
+  const veegKlaar = e => { if (veeg && veeg.id === e.pointerId) { veeg = null; doel = null; } };
+  cv.addEventListener('pointerup', veegKlaar);
+  cv.addEventListener('pointercancel', veegKlaar);
+  for (const [id, actie] of [['raketKnop', lanceerRaket], ['rolKnop', rol], ['pauzeKnop', () => pauze()]])
+    $(id).addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); actie(); });
+
+  // voor tests en nieuwsgierige spelers
+  window.storm = { get speler() { return speler; }, get vijanden() { return vijanden; }, get baas() { return baas; }, get golf() { return golf; }, get score() { return score; }, get toestand() { return toestand; },
+    startGolf, nieuwSpel, lanceerRaket, rol, updateSpel, updateWereld, updateCamera, explosie, camera, pixelRatio: () => pixelRatio, renderer, set doel(d) { doel = d; } };
+
+  maatAanpassen();
+  camera.position.set(10, 4, 14);
+  zetToestand('menu');
+  requestAnimationFrame(frame);
+  </script>
+</body>
+</html>

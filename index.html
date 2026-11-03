@@ -94,6 +94,16 @@
 
     .spel-kaart:hover::before { opacity: 1; }
 
+    /* het 3D-spel staat bovenaan over de volle breedte van het raster */
+    .spel-kaart.uitgelicht {
+      grid-column: 1 / -1;
+      background: linear-gradient(135deg, rgba(34,211,238,0.12), rgba(232,121,249,0.12));
+      border-color: rgba(232,121,249,0.45);
+      box-shadow: 0 0 30px rgba(232,121,249,0.18);
+    }
+    .spel-kaart.uitgelicht .kaart-naam { font-size: 1.5rem; text-shadow: 0 0 16px rgba(34,211,238,0.6); }
+    .spel-kaart.uitgelicht .kaart-beschrijving { max-width: 520px; }
+
     .kaart-emoji {
       font-size: 3rem;
       display: block;
@@ -167,6 +177,7 @@
       <a href="planeetverdediger.html" class="nav-tab">Planeetverdediger</a>
       <a href="neontunnel.html" class="nav-tab">Neontunnel</a>
       <a href="sterrensprong.html" class="nav-tab">Sterrensprong</a>
+      <a href="sterrenstorm.html" class="nav-tab">Sterrenstorm 3D</a>
     </div>
   </nav>
 
@@ -174,10 +185,18 @@
     <div class="hero">
       <span class="hero-emoji">🎮</span>
       <h1>Spelletjes</h1>
-      <p>Twaalf gratis spelletjes om direct te spelen.<br>Kies een spel en begin!</p>
+      <p>Dertien gratis spelletjes om direct te spelen.<br>Kies een spel en begin!</p>
     </div>
 
     <div class="spellen-grid">
+
+      <a href="sterrenstorm.html" class="spel-kaart uitgelicht">
+        <span class="kaart-emoji">🌌</span>
+        <div class="kaart-naam">Sterrenstorm 3D</div>
+        <div class="kaart-beschrijving">Ons meest spectaculaire spel: vlieg in echte 3D door asteroïdenvelden en vijandelijke vloten en ontmantel gigantische moederschepen.</div>
+        <span class="kaart-badge">✨ Nieuw · 3D</span>
+        <span class="spelen-pijl">Spelen →</span>
+      </a>
 
       <a href="geheugen-spel.html" class="spel-kaart">
         <span class="kaart-emoji">🃏</span>
