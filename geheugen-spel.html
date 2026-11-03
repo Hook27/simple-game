@@ -148,6 +148,7 @@
     const ALLE_EMOJI = ['🦊','🐬','🦋','🌵','🍕','🎸','🚀','🌈','🦄','🍩','🎯','🔥','🐸','🦁','🎃','🍓'];
 
     let omgedraaid = [], gevonden = 0, zetten = 0, geblokkeerd = false;
+    let spelId = 0; // verhoogd bij elk nieuw spel, zodat oude timers niets meer doen
 
     function shuffle(arr) {
       const a = [...arr];
@@ -167,6 +168,7 @@
     function bouwSpel() {
       const grid = document.getElementById('kaarten-grid');
       grid.innerHTML = '';
+      spelId++;
       omgedraaid = [];
       gevonden = 0;
       zetten = 0;
@@ -205,8 +207,10 @@
       document.getElementById('zetten').textContent = zetten;
 
       const [a, b] = omgedraaid;
+      const id = spelId;
       if (a.dataset.emoji === b.dataset.emoji) {
         setTimeout(() => {
+          if (id !== spelId) return; // spel is intussen opnieuw gestart
           a.classList.add('gevonden');
           b.classList.add('gevonden');
           a.classList.remove('omgedraaid');
@@ -221,6 +225,7 @@
         a.classList.add('geen-match');
         b.classList.add('geen-match');
         setTimeout(() => {
+          if (id !== spelId) return; // spel is intussen opnieuw gestart
           a.classList.remove('omgedraaid', 'geen-match');
           b.classList.remove('omgedraaid', 'geen-match');
           omgedraaid = [];

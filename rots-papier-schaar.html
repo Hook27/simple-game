@@ -384,6 +384,8 @@
     let rondeNummer  = 1;   // 1–3
     let rondeResults = [];  // 'win' | 'verlies' | 'gelijk'
     let bezig        = false;
+    let matchId      = 0;   // verhoogd bij elk nieuw potje, zodat oude timers niets meer doen
+    let aftelTimer   = null;
 
     /* ── Hulpfuncties ─────────────────────── */
     function bepaalWinnaar(jij, ai) {
@@ -403,6 +405,7 @@
       if (bezig || rondeNummer > 3) return;
       bezig = true;
 
+      const id        = matchId;
       const idx       = rondeNummer - 1;
       const kaart     = document.getElementById(`kaart-${idx}`);
       const emojiJij  = document.getElementById(`emoji-jij-${idx}`);
@@ -421,7 +424,7 @@
       // Countdown animatie in de actieve kaart
       const tellen = ['✊', '✊✊', '✊✊✊'];
       let teller = 0;
-      const interval = setInterval(() => {
+      const interval = aftelTimer = setInterval(() => {
         emojiJij.textContent = tellen[teller];
         emojiAI.textContent  = tellen[teller];
         emojiJij.classList.remove('schud');
@@ -435,6 +438,7 @@
 
       // Onthulling na 900ms
       setTimeout(() => {
+        if (id !== matchId) return; // potje is intussen gereset
         const keuzeAI = KEUZES[Math.floor(Math.random() * 3)];
         emojiJij.textContent = EMOJI[keuzeJij];
         emojiAI.textContent  = EMOJI[keuzeAI];
@@ -458,11 +462,12 @@
 
         if (wasLaatsteRonde) {
           setBolKnoppen(false);
-          setTimeout(toonEindstand, 750);
+          setTimeout(() => { if (id === matchId) toonEindstand(); }, 750);
         } else {
           // Activeer volgende kaart
           document.getElementById(`kaart-${rondeNummer - 1}`).classList.add('actief');
           setTimeout(() => {
+            if (id !== matchId) return;
             document.querySelectorAll('.keuze-knop').forEach(k => k.classList.remove('geselecteerd'));
             setBolKnoppen(true);
             bezig = false;
@@ -505,6 +510,8 @@
 
     /* ── Nieuw potje ──────────────────────── */
     function nieuwMatch() {
+      matchId++;
+      clearInterval(aftelTimer);
       rondeNummer  = 1;
       rondeResults = [];
       bezig        = false;
