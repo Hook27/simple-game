@@ -226,8 +226,12 @@ body {
 
 /* ── Responsive ──────────────────────────────────────────── */
 @media (max-width: 520px) {
-  .nav-logo { font-size: 0.9rem; padding-right: 8px; margin-right: 4px; }
-  .nav-tab  { font-size: 0.72rem; padding: 0 8px; height: 40px; }
+  .nav       { padding: 0 8px; }
+  .nav-inner { overflow-x: auto; scrollbar-width: none; }
+  .nav-inner::-webkit-scrollbar { display: none; }
+  .nav-logo  { font-size: 0.9rem; padding-right: 8px; margin-right: 4px; }
+  .nav-logo span { display: none; }
+  .nav-tab   { font-size: 0.72rem; padding: 0 7px; height: 40px; }
   .pagina   { padding: 10px 10px 14px; }
   .popup    { padding: 22px 20px; }
 }

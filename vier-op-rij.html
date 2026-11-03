@@ -73,15 +73,17 @@
       align-items: center;
       justify-content: center;
       font-size: 0.85rem;
-      color: transparent;
+      color: rgba(252,211,77,0.3);
       border-radius: 50%;
       transition: color 0.15s, background 0.15s;
       line-height: 1;
     }
 
     .drop-knop:hover  { color: #fcd34d; background: rgba(252,211,77,0.1); }
-    .drop-knop:disabled { cursor: not-allowed; }
+    .drop-knop:disabled { cursor: not-allowed; color: transparent; }
     .drop-knop:disabled:hover { color: transparent; background: transparent; }
+
+    .bord.klikbaar .cel { cursor: pointer; }
 
     /* Bord */
     .bord {
@@ -116,12 +118,13 @@
       box-shadow: inset 0 -3px 6px rgba(0,0,0,0.3), 0 0 10px rgba(239,68,68,0.45);
     }
 
-    .cel.win-cel {
-      animation: win-pulse 0.7s ease-in-out infinite alternate;
-    }
-
     .cel.val-animatie {
       animation: val-in 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+    }
+
+    /* Na .val-animatie, zodat de win-animatie voorrang krijgt */
+    .cel.win-cel {
+      animation: win-pulse 0.7s ease-in-out infinite alternate;
     }
 
     @keyframes val-in {
@@ -208,6 +211,7 @@
     ──────────────────────────────────────────── */
     let bord, spelDone, spelerAanBeurt, niveau;
     niveau = 'normaal';
+    let spelId = 0; // verhoogd bij elk nieuw spel, zodat oude timers niets meer doen
 
     /* ────────────────────────────────────────────
        Hulpfuncties voor het bord
@@ -423,6 +427,7 @@
           const cel = document.createElement('div');
           cel.className = 'cel';
           cel.id = `cel-${r}-${c}`;
+          cel.dataset.kolom = c;
           if (bord[r][c] === SPELER) cel.classList.add('speler');
           else if (bord[r][c] === AI)  cel.classList.add('ai');
           bordEl.appendChild(cel);
@@ -441,6 +446,7 @@
         knop.addEventListener('click', () => spelerZet(c));
         rij.appendChild(knop);
       }
+      document.getElementById('bord').classList.toggle('klikbaar', enabled && !spelDone);
     }
 
     function updateDropRij(enabled) {
@@ -448,6 +454,7 @@
       knoppen.forEach((k, i) => {
         k.disabled = !enabled || !isGeldigeKolom(bord, i) || spelDone;
       });
+      document.getElementById('bord').classList.toggle('klikbaar', enabled && !spelDone);
     }
 
     function setCelAnimatie(rij, kolom, cls) {
@@ -480,7 +487,9 @@
       spelerAanBeurt = false;
       zetStatus('AI denkt...', 'ai-denkt');
 
+      const id = spelId;
       setTimeout(() => {
+        if (id !== spelId) return; // spel is intussen opnieuw gestart
         const aiKolom = aiZet(bord);
         if (aiKolom === -1) { return verwerkEinde(LEEG); }
         const aiRij = plaatsSchijf(bord, aiKolom, AI);
@@ -506,7 +515,9 @@
         });
       }
 
+      const id = spelId;
       setTimeout(() => {
+        if (id !== spelId) return; // spel is intussen opnieuw gestart
         const emoji = winnaar === SPELER ? '🏆' : winnaar === AI ? '🤖' : '🤝';
         const titel = winnaar === SPELER ? 'Gewonnen!' : winnaar === AI ? 'Verloren!' : 'Gelijkspel!';
         const tekst = winnaar === SPELER ? 'Gefeliciteerd, jij hebt vier op een rij!' :
@@ -523,6 +534,7 @@
     }
 
     function nieuwSpel() {
+      spelId++;
       bord = maakLeegBord();
       spelDone = false;
       spelerAanBeurt = true;
@@ -542,6 +554,12 @@
       knop.classList.add('actief');
       niveau = knop.dataset.niveau;
       nieuwSpel();
+    });
+
+    // Klikken op een vakje van het bord laat een schijf in die kolom vallen
+    document.getElementById('bord').addEventListener('click', (e) => {
+      const cel = e.target.closest('.cel');
+      if (cel) spelerZet(Number(cel.dataset.kolom));
     });
 
     document.getElementById('opnieuw').addEventListener('click', nieuwSpel);
