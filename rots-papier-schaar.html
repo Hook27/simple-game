@@ -269,7 +269,7 @@
 
   <div class="pagina">
     <h1 class="spel-titel">Rots-Papier-Schaar</h1>
-    <p class="spel-subtitel">Best of Three — wie wint 2 van de 3 rondes?</p>
+    <p class="spel-subtitel">Best of Three — wie wint 2 van de 3 rondes?<br>Niemand 2 rondes gewonnen? Dan is het gelijkspel.</p>
 
     <!-- Totaal scorebord (match-wins over alle potjes) -->
     <div class="score-rij">
@@ -457,10 +457,13 @@
           uitslag === 'win'     ? '✓ Jij wint!' :
           uitslag === 'verlies' ? '✗ AI wint!'  : '= Gelijk!';
 
-        const wasLaatsteRonde = (rondeNummer === 3);
+        // Wie als eerste 2 rondes wint, wint de match; anders na ronde 3 klaar
+        const jijWins = rondeResults.filter(r => r === 'win').length;
+        const aiWins  = rondeResults.filter(r => r === 'verlies').length;
+        const matchKlaar = rondeNummer === 3 || jijWins === 2 || aiWins === 2;
         rondeNummer++;
 
-        if (wasLaatsteRonde) {
+        if (matchKlaar) {
           setBolKnoppen(false);
           setTimeout(() => { if (id === matchId) toonEindstand(); }, 750);
         } else {
@@ -480,12 +483,20 @@
     function toonEindstand() {
       const jijWins = rondeResults.filter(r => r === 'win').length;
       const aiWins  = rondeResults.filter(r => r === 'verlies').length;
-      const gelijks = 3 - jijWins - aiWins;
+      const gelijks = rondeResults.length - jijWins - aiWins;
 
+      // Alleen wie 2 rondes heeft gewonnen wint de match
       let matchUitslag;
-      if      (jijWins > aiWins) { matchUitslag = 'win';     matchJij++;    }
-      else if (aiWins > jijWins) { matchUitslag = 'verlies'; matchAI++;     }
-      else                       { matchUitslag = 'gelijk';  matchGelijk++; }
+      if      (jijWins >= 2) { matchUitslag = 'win';     matchJij++;    }
+      else if (aiWins  >= 2) { matchUitslag = 'verlies'; matchAI++;     }
+      else                   { matchUitslag = 'gelijk';  matchGelijk++; }
+
+      // Rondes die niet meer nodig waren
+      for (let i = rondeResults.length; i < 3; i++) {
+        document.getElementById(`emoji-jij-${i}`).textContent = '–';
+        document.getElementById(`emoji-ai-${i}`).textContent  = '–';
+        document.getElementById(`uitslag-${i}`).textContent   = 'Niet nodig';
+      }
 
       document.getElementById('score-jij').textContent    = matchJij;
       document.getElementById('score-gelijk').textContent = matchGelijk;
