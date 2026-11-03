@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Planeetverdediger</title>
+  <link rel="icon" href="icons/planeetverdediger.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="stijl.css">
+  <link rel="stylesheet" href="arcade.css">
+  <script src="nav.js" defer></script>
+  <script src="arcade.js"></script>
+  <style>
+    body[data-toestand="spelen"] #spel canvas { cursor: crosshair; }
+  </style>
+</head>
+<body data-toestand="menu">
+
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-logo">🎮 <span>Spelletjes</span></a>
+      <a href="geheugen-spel.html" class="nav-tab">Geheugen spel</a>
+      <a href="vier-op-rij.html" class="nav-tab">Vier op een rij</a>
+      <a href="rots-papier-schaar.html" class="nav-tab">Rots-Papier-Schaar</a>
+      <a href="pixel-breakout.html" class="nav-tab">Pixel Breakout</a>
+      <a href="boter-kaas-en-eieren.html" class="nav-tab">Boter-kaas-en-eieren</a>
+      <a href="galgje.html" class="nav-tab">Galgje</a>
+      <a href="slang.html" class="nav-tab">Slang</a>
+      <a href="mijnenveger.html" class="nav-tab">Mijnenveger</a>
+      <a href="neon-sterrenjager.html" class="nav-tab">Sterrenjager</a>
+      <a href="planeetverdediger.html" class="nav-tab actief">Planeetverdediger</a>
+      <a href="neontunnel.html" class="nav-tab">Neontunnel</a>
+      <a href="sterrensprong.html" class="nav-tab">Sterrensprong</a>
+    </div>
+  </nav>
+
+  <div id="wrap">
+    <div id="spel">
+      <canvas id="cv"></canvas>
+      <button class="aanraak-knop links" id="pauzeKnop" type="button" aria-label="Pauze">⏸</button>
+      <button class="aanraak-knop rechts" id="novaKnop" type="button" aria-label="Nova">💥<span class="aantal" id="novaAantal">2</span></button>
+    </div>
+  </div>
+
+  <div class="onderbalk">
+    <button class="geluid-knop" id="geluidKnop" type="button">🔊 Geluid</button>
+    <span class="toetsen">Muis = richten · pijltjes/A-D = draaien · schieten gaat vanzelf · spatie of N = nova · P = pauze</span>
+    <span class="aanraak">Tik of sleep waar je wilt richten · schieten gaat vanzelf · 💥 = nova</span>
+  </div>
+
+  <script>
+  "use strict";
+  const { tekenSprite: spr, tekst: tk, gloeiTekst, getal, willekeurig } = Arcade;
+
+  /* ════════════════════════════════════════════════════════════
+     Speelveld: 600 × 600, de planeet staat in het midden
+  ════════════════════════════════════════════════════════════ */
+  const W = 600, H = 600, CX = W / 2, CY = H / 2;
+  const PLANEET_R = 44, BAAN_R = 64, SCHILD_R = 96, START_D = 440;
+  const cv = document.getElementById('cv');
+  const ctx = Arcade.maakCanvas(cv, W, H);
+  const geluid = Arcade.maakGeluid('pv-geluid', document.getElementById('geluidKnop'));
+  const recordOpslag = Arcade.record('pv-record');
+
+  const hoekVerschil = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
+
+  function sfx(soort) {
+    const g = geluid;
+    switch (soort) {
+      case 'schot':   if (g.mag(soort, 80)) g.toon(760, 0.05, 'square', 0.022, 380); break;
+      case 'raak':    if (g.mag(soort, 45)) g.toon(300, 0.04, 'square', 0.04, 170); break;
+      case 'kaats':   if (g.mag(soort, 40)) g.toon(1400, 0.07, 'triangle', 0.08, 2200); break;
+      case 'botst':   if (g.mag(soort, 60)) g.toon(200, 0.1, 'triangle', 0.1, 90); break;
+      case 'boem':    if (g.mag(soort, 45)) g.knal(0.32, 0.3, 1800); break;
+      case 'inslag':  if (g.mag(soort, 80)) { g.knal(0.5, 0.45, 900); g.toon(90, 0.4, 'sine', 0.25, 40); } break;
+      case 'grootBoem': g.knal(1.4, 0.75, 2600); g.toon(100, 1, 'sawtooth', 0.16, 25); break;
+      case 'nova':    g.knal(1.1, 0.8, 3400); g.toon(60, 1, 'sine', 0.4, 200); break;
+      case 'capsule': g.toon(523, 0.08, 'square', 0.1); g.toon(784, 0.1, 'square', 0.1, null, 0.07); g.toon(1047, 0.15, 'square', 0.11, null, 0.14); break;
+      case 'combo':   g.toon(660, 0.08, 'triangle', 0.11, 990); break;
+      case 'golf':    [392, 523, 659, 784].forEach((f, i) => g.toon(f, 0.14, 'square', 0.08, null, i * 0.09)); break;
+      case 'alarm':   for (let i = 0; i < 4; i++) { g.toon(880, 0.22, 'square', 0.07, 440, i * 0.5); g.toon(660, 0.22, 'square', 0.05, 330, i * 0.5 + 0.25); } break;
+      case 'gameover': [330, 262, 196, 131].forEach((f, i) => g.toon(f, 0.4, 'sawtooth', 0.12, null, i * 0.22)); break;
+    }
+  }
+
+  /* ════════════════════════════════════════════════════════════
+     Sprites
+  ════════════════════════════════════════════════════════════ */
+  const { sprite, poly, regelmatig, neon } = Arcade;
+
+  const KANON = sprite(40, 40, g => {
+    neon(g, () => poly(g, [[0, -14], [10, 8], [4, 5], [0, 10], [-4, 5], [-10, 8]]), '#22d3ee', 2.5, 12, 'rgba(14,50,80,0.9)');
+    g.fillStyle = '#e0f2fe'; g.beginPath(); g.arc(0, -2, 2.5, 0, Math.PI * 2); g.fill();
+  });
+
+  const SOORTEN = {
+    meteoor:   { r: 17, hp: 3,  punten: 100, schade: 8,  kleur: '#fb923c', drop: 0.07 },
+    brokje:    { r: 9,  hp: 1,  punten: 40,  schade: 4,  kleur: '#fdba74', drop: 0.02 },
+    jager:     { r: 11, hp: 1,  punten: 150, schade: 5,  kleur: '#f472b6', drop: 0.06 },
+    zwerm:     { r: 6,  hp: 1,  punten: 60,  schade: 2,  kleur: '#facc15', drop: 0.02 },
+    kruiser:   { r: 18, hp: 6,  punten: 300, schade: 10, kleur: '#a78bfa', drop: 0.25 },
+    bommenwerper: { r: 22, hp: 14, punten: 600, schade: 25, kleur: '#f87171', drop: 0.5 },
+  };
+  const VORMEN = {
+    meteoor: g => poly(g, [[0, -17], [12, -11], [17, 2], [9, 14], [-5, 16], [-16, 6], [-14, -9]]),
+    brokje:  g => poly(g, [[0, -9], [8, -3], [6, 7], [-5, 8], [-9, -2]]),
+    jager:   g => poly(g, [[0, 11], [10, -8], [0, -3], [-10, -8]]),
+    zwerm:   g => regelmatig(g, 3, 6, Math.PI / 2),
+    kruiser: g => regelmatig(g, 6, 18, 0),
+    bommenwerper: g => poly(g, [[0, 22], [16, 6], [22, -12], [8, -18], [-8, -18], [-22, -12], [-16, 6]]),
+  };
+  function vijandSprite(soort, wit) {
+    const s = SOORTEN[soort], k = wit ? '#fff' : s.kleur;
+    return sprite(s.r * 2 + 28, s.r * 2 + 28, g => {
+      neon(g, () => VORMEN[soort](g), k, 2.5, 10, wit ? 'rgba(255,255,255,0.55)' : 'rgba(12,10,26,0.88)');
+      g.fillStyle = k; g.strokeStyle = k; g.lineWidth = 1.5;
+      if (soort === 'meteoor') { g.beginPath(); g.arc(-4, -3, 4, 0, Math.PI * 2); g.stroke(); g.beginPath(); g.arc(6, 6, 2.5, 0, Math.PI * 2); g.stroke(); }
+      if (soort === 'jager') { g.beginPath(); g.arc(0, 1, 2.5, 0, Math.PI * 2); g.fill(); }
+      if (soort === 'kruiser') { regelmatig(g, 6, 9, 0); g.stroke(); g.beginPath(); g.arc(0, 0, 3, 0, Math.PI * 2); g.fill(); }
+      if (soort === 'bommenwerper') { g.beginPath(); g.arc(0, -2, 6, 0, Math.PI * 2); g.fill(); g.beginPath(); g.moveTo(-14, -8); g.lineTo(14, -8); g.stroke(); }
+    });
+  }
+  const VIJAND_SPR = {};
+  for (const s in SOORTEN) VIJAND_SPR[s] = { gewoon: vijandSprite(s, false), wit: vijandSprite(s, true) };
+
+  const KOGEL = Arcade.bol('#67e8f9', 3);
+  const KOGEL_VIJAND = Arcade.bol('#f472b6', 4);
+  const KOGEL_GEKAATST = Arcade.bol('#22d3ee', 4.5);
+
+  const CAPSULES = {
+    snel:     { kleur: '#22d3ee', teken: '»', naam: 'SNELVUUR' },
+    drie:     { kleur: '#4ade80', teken: '⋔', naam: 'DRIEDUBBEL' },
+    breed:    { kleur: '#facc15', teken: '◠', naam: 'BREED SCHILD' },
+    reparatie:{ kleur: '#f87171', teken: '+', naam: 'REPARATIE' },
+    nova:     { kleur: '#fb923c', teken: '✸', naam: '+1 NOVA' },
+  };
+  const CAPSULE_SPR = {};
+  for (const id in CAPSULES) {
+    const c = CAPSULES[id];
+    CAPSULE_SPR[id] = sprite(44, 44, g => {
+      neon(g, () => Arcade.regelmatig(g, 6, 13, Math.PI / 6), c.kleur, 2.5, 12, 'rgba(10,10,28,0.85)');
+      g.fillStyle = c.kleur;
+      g.font = 'bold 15px "Segoe UI", system-ui, sans-serif';
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(c.teken, 0, 1);
+    });
+  }
+
+  /* ── De planeet: een rond getekende wereld die langzaam draait ── */
+  const WERELD = document.createElement('canvas');
+  const WERELD_PX = 2 * PLANEET_R * 2;               // twee keer zo scherp
+  WERELD.width = WERELD_PX * 2; WERELD.height = WERELD_PX;   // twee keer zo breed: naadloos doordraaien
+  (() => {
+    const g = WERELD.getContext('2d');
+    const zee = g.createLinearGradient(0, 0, 0, WERELD_PX);
+    zee.addColorStop(0, '#1e40af'); zee.addColorStop(0.5, '#2563eb'); zee.addColorStop(1, '#1e3a8a');
+    g.fillStyle = zee; g.fillRect(0, 0, WERELD.width, WERELD_PX);
+    const land = [];
+    for (let i = 0; i < 9; i++) land.push([Math.random() * WERELD_PX, willekeurig(0.2, 0.8) * WERELD_PX, willekeurig(10, 26)]);
+    for (const dx of [0, WERELD_PX])
+      for (const [x, y, r] of land) {
+        for (let j = 0; j < 7; j++) {
+          const ox = x + dx + willekeurig(-r, r), oy = y + willekeurig(-r * 0.6, r * 0.6), rr = r * willekeurig(0.45, 0.8);
+          g.fillStyle = j % 3 ? '#16a34a' : '#65a30d';
+          g.beginPath(); g.arc(ox, oy, rr, 0, Math.PI * 2); g.fill();
+        }
+      }
+    // ijskappen en wolken
+    g.fillStyle = 'rgba(241,245,249,0.9)'; g.fillRect(0, 0, WERELD.width, WERELD_PX * 0.08); g.fillRect(0, WERELD_PX * 0.92, WERELD.width, WERELD_PX * 0.08);
+    g.fillStyle = 'rgba(255,255,255,0.35)';
+    for (let i = 0; i < 14; i++) {
+      const x = Math.random() * WERELD_PX, y = Math.random() * WERELD_PX;
+      for (const dx of [0, WERELD_PX]) { g.beginPath(); g.ellipse(x + dx, y, willekeurig(12, 28), willekeurig(3, 6), 0, 0, Math.PI * 2); g.fill(); }
+    }
+  })();
+  const ATMOSFEER = sprite(PLANEET_R * 2 + 60, PLANEET_R * 2 + 60, g => {
+    g.shadowColor = '#60a5fa'; g.shadowBlur = 26;
+    g.strokeStyle = 'rgba(147,197,253,0.6)'; g.lineWidth = 4;
+    g.beginPath(); g.arc(0, 0, PLANEET_R + 1, 0, Math.PI * 2); g.stroke();
+  });
+
+  /* ── Achtergrond: sterren en nevel ── */
+  const ACHTERGROND = document.createElement('canvas');
+  ACHTERGROND.width = W; ACHTERGROND.height = H;
+  (() => {
+    const g = ACHTERGROND.getContext('2d');
+    g.fillStyle = '#05060f'; g.fillRect(0, 0, W, H);
+    for (const [x, y, r, k] of [[120, 110, 260, 'rgba(147,51,234,0.16)'], [500, 480, 280, 'rgba(14,165,233,0.13)'], [480, 90, 200, 'rgba(236,72,153,0.09)']]) {
+      const gr = g.createRadialGradient(x, y, 0, x, y, r);
+      gr.addColorStop(0, k); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = gr; g.fillRect(0, 0, W, H);
+    }
+    for (let i = 0; i < 220; i++) {
+      g.fillStyle = `rgba(220,235,255,${Math.random() * 0.7 + 0.15})`;
+      const s = Math.random() < 0.1 ? 2 : 1;
+      g.fillRect(Math.random() * W, Math.random() * H, s, s);
+    }
+  })();
+
+  /* ════════════════════════════════════════════════════════════
+     Spelstaat
+  ════════════════════════════════════════════════════════════ */
+  let toestand = 'menu', tijd = 0;
+  let hoek = -Math.PI / 2, doelHoek = hoek, vuur = 0;
+  let planeet, vijanden, kogels, vKogels, deeltjes, ringen, teksten, capsules, novaGolf;
+  let score, novas, golf, golfTijd, wachtrij, golfKlaar, golfPauze, baas, combo, stats, power, banner;
+  let schok = 0, flits = 0, flitsKleur = '#fff', eindTimer = 0, kanHerstart = false, nieuwRecord = false;
+  let record = recordOpslag.lees();
+
+  function zetToestand(t) { toestand = t; document.body.dataset.toestand = t; }
+
+  function leegSpel() {
+    planeet = { hp: 100, max: 100, draai: 0, flits: 0, dood: false };
+    vijanden = []; kogels = []; vKogels = []; deeltjes = []; ringen = []; teksten = []; capsules = [];
+    novaGolf = null; baas = null; banner = null;
+    score = 0; novas = 2; golf = 0; eindTimer = 0;
+    combo = { n: 0, timer: 0, mult: 1, best: 1 };
+    stats = { kills: 0, gekaatst: 0 };
+    power = { snel: 0, drie: 0, breed: 0 };
+  }
+
+  function nieuwSpel() {
+    geluid.start();
+    leegSpel();
+    schok = 0; flits = 0; kanHerstart = false; nieuwRecord = false;
+    zetToestand('spelen');
+    werkNovaKnopBij();
+    startGolf(1);
+  }
+
+  /* ── Golven ───────────────────────────────── */
+  function plan(over, actie) { wachtrij.push({ t: golfTijd + over, actie }); wachtrij.sort((a, b) => a.t - b.t); }
+
+  const ONDERTITELS = { 1: 'Bescherm de planeet!', 2: 'Jagers draaien om je heen', 3: 'Een zwerm nadert', 4: 'Kruisers schieten op afstand: kaats terug!', 6: 'Bommenwerpers: het schild houdt ze niet tegen' };
+
+  function startGolf(n) {
+    golf = n; golfTijd = 0; wachtrij = []; golfKlaar = false;
+    if (n % 5 === 0) {
+      zetBanner('⚠ WAARSCHUWING ⚠', 'MOEDERSCHIP NADERT', '#f87171', 200);
+      sfx('alarm');
+      plan(160, () => maakBaas(n / 5));
+      return;
+    }
+    zetBanner('GOLF ' + n, ONDERTITELS[n] || ['Hou stand!', 'Ze komen van alle kanten', 'Laat niets door!', 'Volle kracht!'][n % 4], '#22d3ee', 130);
+    sfx('golf');
+    const groepen = Math.min(12, 4 + Math.floor(n * 0.9));
+    let t = 100;
+    for (let i = 0; i < groepen; i++) { kiesGroep(n)(t); t += Math.max(60, 160 - n * 6); }
+  }
+
+  function kiesGroep(n) {
+    const pot = [groepMeteoren, groepMeteoren];
+    if (n >= 2) pot.push(groepJagers, groepJagers);
+    if (n >= 3) pot.push(groepZwerm);
+    if (n >= 4) pot.push(groepKruiser);
+    if (n >= 6) pot.push(groepBommenwerper);
+    return pot[Math.floor(Math.random() * pot.length)];
+  }
+
+  // alle vijanden bewegen in poolcoördinaten: hoek a en afstand d tot het midden
+  function maakVijand(soort, a, d, extra = {}) {
+    const s = SOORTEN[soort];
+    const hp = s.hp + (s.hp > 2 ? Math.floor((golf - 1) / 4) : 0);
+    const v = { soort, a, d, hp, r: s.r, vr: 1, va: 0, t: 0, flits: 0, terug: 0, draai: Math.random() * 6, vuur: willekeurig(80, 160), ...extra };
+    vijanden.push(v);
+    plaats(v);
+    return v;
+  }
+  function plaats(v) { v.x = CX + Math.cos(v.a) * v.d; v.y = CY + Math.sin(v.a) * v.d; }
+  const tempo = () => 1 + Math.min(0.9, (golf - 1) * 0.06);
+
+  function groepMeteoren(t) {
+    const n = 2 + Math.floor(Math.random() * 3), a0 = Math.random() * Math.PI * 2;
+    for (let i = 0; i < n; i++) plan(t + i * 35, () => maakVijand('meteoor', a0 + willekeurig(-0.5, 0.5), START_D, { vr: willekeurig(0.55, 0.9) * tempo() }));
+  }
+  function groepJagers(t) {
+    const a0 = Math.random() * Math.PI * 2, richting = Math.random() < 0.5 ? 1 : -1;
+    for (let i = 0; i < 4; i++) plan(t + i * 16, () => maakVijand('jager', a0, START_D, { vr: 0.75 * tempo(), va: 0.011 * richting }));
+  }
+  function groepZwerm(t) {
+    const a0 = Math.random() * Math.PI * 2;
+    for (let i = 0; i < 8; i++) plan(t + i * 5, () => maakVijand('zwerm', a0 + willekeurig(-0.22, 0.22), START_D + willekeurig(0, 40), { vr: 1.5 * tempo() }));
+  }
+  function groepKruiser(t) {
+    plan(t, () => maakVijand('kruiser', Math.random() * Math.PI * 2, START_D, { vr: 0.9, va: 0, stopD: willekeurig(220, 250), draairichting: Math.random() < 0.5 ? 1 : -1 }));
+  }
+  function groepBommenwerper(t) {
+    plan(t, () => maakVijand('bommenwerper', Math.random() * Math.PI * 2, START_D, { vr: 0.42 * tempo() }));
+  }
+
+  /* ── Effecten ─────────────────────────────── */
+  function schud(k) { schok = Math.min(16, Math.max(schok, k)); }
+  function flitsen(s, k = '#fff') { flits = Math.max(flits, s); flitsKleur = k; }
+  function explosie(x, y, kleur, grootte = 1) {
+    const n = Math.round(14 * grootte);
+    for (let i = 0; i < n && deeltjes.length < 1100; i++) {
+      const a = Math.random() * Math.PI * 2, s = Math.random() * 3.4 * Math.sqrt(grootte) + 0.5;
+      deeltjes.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, leven: 30 + Math.random() * 30, max: 60, kleur: Math.random() < 0.25 ? '#fff' : kleur, maat: 2 + Math.random() * 2 });
+    }
+    ringen.push({ x, y, r: 4, vr: 2.2 + grootte * 0.8, leven: 22, max: 22, kleur, dikte: 2 + grootte });
+  }
+  function vonken(x, y, kleur, n = 3) {
+    for (let i = 0; i < n && deeltjes.length < 1100; i++) {
+      const a = Math.random() * Math.PI * 2, s = Math.random() * 2.5 + 0.5;
+      deeltjes.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, leven: 12 + Math.random() * 10, max: 22, kleur, maat: 1.5 });
+    }
+  }
+  function zweefTekst(x, y, t, kleur = '#fff', maat = 13, leven = 50) {
+    if (teksten.length > 40) teksten.shift();
+    teksten.push({ x, y, t, kleur, maat, leven, max: leven });
+  }
+  function zetBanner(t, sub, kleur, duur) { banner = { t, sub, kleur, tijd: 0, duur }; }
+
+  function punten(p, x, y) {
+    combo.n++; combo.timer = 110;
+    const oud = combo.mult;
+    combo.mult = Math.min(8, 1 + Math.floor(combo.n / 6));
+    combo.best = Math.max(combo.best, combo.mult);
+    if (combo.mult > oud) { zweefTekst(CX, CY - 150, 'COMBO ×' + combo.mult, '#facc15', 26, 60); sfx('combo'); }
+    const totaal = p * combo.mult;
+    score += totaal;
+    zweefTekst(x, y, '+' + totaal, combo.mult > 1 ? '#facc15' : '#e2e8f0', p >= 300 ? 15 : 11, 40);
+  }
+
+  /* ── Schade ───────────────────────────────── */
+  function raakVijand(v, dmg, x, y) {
+    if (v.dood) return;
+    v.hp -= dmg; v.flits = 4;
+    if (Math.random() < 0.6) vonken(x, y, SOORTEN[v.soort].kleur, 2);
+    sfx('raak');
+    if (v.hp <= 0) vijandDood(v);
+  }
+  function vijandDood(v, metPunten = true) {
+    v.dood = true;
+    const s = SOORTEN[v.soort];
+    if (metPunten) { stats.kills++; punten(s.punten, v.x, v.y); }
+    const groot = v.soort === 'bommenwerper' ? 2.6 : v.soort === 'kruiser' || v.soort === 'meteoor' ? 1.5 : 1;
+    explosie(v.x, v.y, s.kleur, groot);
+    schud(groot * 2.2);
+    sfx(groot > 2 ? 'grootBoem' : 'boem');
+    if (v.soort === 'meteoor' && metPunten)
+      for (const r of [-1, 1]) maakVijand('brokje', v.a + r * 0.06, v.d, { vr: v.vr * 1.25, va: r * 0.004 });
+    if (metPunten && Math.random() < s.drop) laatCapsuleVallen(v.a, v.d);
+  }
+  function laatCapsuleVallen(a, d, soort) {
+    if (!soort) {
+      const opties = Object.keys(CAPSULES).filter(id => id !== 'reparatie' || planeet.hp < planeet.max);
+      soort = opties[Math.floor(Math.random() * opties.length)];
+    }
+    capsules.push({ soort, a, d, t: 0, x: CX + Math.cos(a) * d, y: CY + Math.sin(a) * d });
+  }
+  function pakCapsule(c) {
+    const info = CAPSULES[c.soort];
+    sfx('capsule');
+    ringen.push({ x: c.x, y: c.y, r: 8, vr: 3, leven: 20, max: 20, kleur: info.kleur, dikte: 3 });
+    if (c.soort === 'snel') power.snel = 600;
+    else if (c.soort === 'drie') power.drie = 600;
+    else if (c.soort === 'breed') power.breed = 600;
+    else if (c.soort === 'reparatie') planeet.hp = Math.min(planeet.max, planeet.hp + 25);
+    else if (c.soort === 'nova') { novas = Math.min(5, novas + 1); werkNovaKnopBij(); }
+    zweefTekst(c.x, c.y - 20, info.naam, info.kleur, 14, 60);
+  }
+
+  function planeetGeraakt(schade, x, y) {
+    if (planeet.dood) return;
+    planeet.hp -= schade;
+    planeet.flits = 6;
+    explosie(x, y, '#fb923c', 1.2);
+    schud(4 + schade * 0.3);
+    if (schade >= 10) flitsen(0.35, '#f87171');
+    sfx('inslag');
+    combo.n = 0; combo.mult = 1; combo.timer = 0;
+    if (planeet.hp <= 0) {
+      planeet.hp = 0;
+      planeet.dood = true;
+      eindTimer = 150;
+      vKogels = [];
+    }
+  }
+
+  function gebruikNova() {
+    if (toestand !== 'spelen' || novas <= 0 || planeet.dood || novaGolf) return;
+    novas--;
+    werkNovaKnopBij();
+    sfx('nova');
+    flitsen(0.6, '#fde68a');
+    schud(12);
+    novaGolf = { r: PLANEET_R, geraakt: new Set(), baasGeraakt: false };
+  }
+  function werkNovaKnopBij() { document.getElementById('novaAantal').textContent = novas; }
+
+  /* ── Moederschip ──────────────────────────── */
+  const BAAS_KLEUREN = ['#f43f5e', '#a855f7', '#f97316', '#10b981'];
+  function baasSprite(kleur, wit) {
+    const k = wit ? '#fff' : kleur;
+    return sprite(130, 130, g => {
+      neon(g, () => Arcade.regelmatig(g, 8, 44, Math.PI / 8), k, 3, 18, wit ? 'rgba(255,255,255,0.5)' : 'rgba(28,8,36,0.92)');
+      g.strokeStyle = k; g.lineWidth = 1.5;
+      Arcade.regelmatig(g, 8, 28, 0); g.stroke();
+      for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; g.beginPath(); g.moveTo(Math.cos(a) * 28, Math.sin(a) * 28); g.lineTo(Math.cos(a) * 42, Math.sin(a) * 42); g.stroke(); }
+    });
+  }
+  function maakBaas(k) {
+    const kleur = BAAS_KLEUREN[(k - 1) % BAAS_KLEUREN.length];
+    const hp = 240 + 170 * (k - 1);
+    baas = { a: Math.random() * Math.PI * 2, d: START_D, doelD: 250, r: 40, hp, max: hp, k, t: 0, flits: 0, binnen: false, dood: false, sterf: 0, kleur,
+             spr: baasSprite(kleur, false), sprWit: baasSprite(kleur, true) };
+    plaats(baas);
+  }
+  function raakBaas(dmg, x, y) {
+    if (!baas || !baas.binnen || baas.dood) return;
+    baas.hp -= dmg; baas.flits = 3;
+    if (Math.random() < 0.5) vonken(x, y, baas.kleur, 2);
+    sfx('raak');
+    if (baas.hp <= 0) { baas.dood = true; baas.sterf = 0; vKogels = vKogels.filter(k => k.gekaatst); schud(10); }
+  }
+  function vijandSchiet(x, y, hoek, snelheid) {
+    if (vKogels.length > 350) return;
+    vKogels.push({ x, y, vx: Math.cos(hoek) * snelheid, vy: Math.sin(hoek) * snelheid, r: 4, gekaatst: false });
+  }
+  const naarPlaneet = o => Math.atan2(CY - o.y, CX - o.x);
+
+  function updateBaas() {
+    const b = baas;
+    b.t++;
+    if (b.flits > 0) b.flits--;
+    if (!b.binnen) { b.d -= 1.3; if (b.d <= b.doelD) b.binnen = true; plaats(b); return; }
+    if (b.dood) {
+      b.sterf++;
+      if (b.sterf % 6 === 0) { explosie(b.x + willekeurig(-40, 40), b.y + willekeurig(-40, 40), Math.random() < 0.5 ? b.kleur : '#fde68a', 1.5); schud(5); sfx('boem'); }
+      if (b.sterf > 100) {
+        explosie(b.x, b.y, b.kleur, 6); explosie(b.x, b.y, '#fde68a', 4);
+        for (let i = 0; i < 4; i++) ringen.push({ x: b.x, y: b.y, r: 10, vr: 4 + i * 2.5, leven: 50, max: 50, kleur: i % 2 ? b.kleur : '#fff', dikte: 6 });
+        flitsen(1); schud(16); sfx('grootBoem');
+        stats.kills++;
+        punten(5000 * b.k, b.x, b.y);
+        laatCapsuleVallen(b.a - 0.15, b.d, 'reparatie');
+        laatCapsuleVallen(b.a + 0.15, b.d, 'nova');
+        baas = null;
+      }
+      return;
+    }
+    const fase = b.hp / b.max > 0.5 ? 1 : 2;
+    const sp = 1 + (b.k - 1) * 0.12;
+    b.a += (fase === 1 ? 0.0045 : 0.0075) * sp;
+    b.d = b.doelD + Math.sin(b.t * 0.02) * 14;
+    plaats(b);
+    if (b.t % Math.max(50, 80 - b.k * 6) === 0) for (let i = -2; i <= 2; i++) vijandSchiet(b.x, b.y, naarPlaneet(b) + i * 0.12, 2.3 * sp);
+    if (b.t % 150 === 0) for (const r of [-1, 1]) maakVijand('jager', b.a + r * 0.2, b.d + 20, { vr: 0.8, va: r * 0.012 });
+    if (fase === 2 && b.t % 55 === 0) for (let i = 0; i < 12; i++) vijandSchiet(b.x, b.y, i * Math.PI / 6 + b.t * 0.01, 2.1 * sp);
+  }
+
+  /* ════════════════════════════════════════════════════════════
+     Update
+  ════════════════════════════════════════════════════════════ */
+  const toetsen = {};
+  const schildHalf = () => power.breed > 0 ? 1.45 : 0.62;
+  const kanonX = () => CX + Math.cos(hoek) * BAAN_R, kanonY = () => CY + Math.sin(hoek) * BAAN_R;
+
+  function inSchild(x, y, r) {
+    const d = Math.hypot(x - CX, y - CY);
+    if (d - r > SCHILD_R + 4 || d + r < SCHILD_R - 4) return false;
+    return Math.abs(hoekVerschil(Math.atan2(y - CY, x - CX), hoek)) < schildHalf() + r / d;
+  }
+
+  function updateKanon() {
+    const k = (toetsen.arrowleft || toetsen.a ? -1 : 0) + (toetsen.arrowright || toetsen.d ? 1 : 0);
+    if (k) doelHoek = hoek + k * 0.09;
+    hoek += Math.max(-0.17, Math.min(0.17, hoekVerschil(doelHoek, hoek)));
+    if (--vuur <= 0) {
+      vuur = power.snel > 0 ? 4 : 8;
+      const spreiding = power.drie > 0 ? [-0.16, 0, 0.16] : [0];
+      for (const s of spreiding) {
+        const a = hoek + s;
+        kogels.push({ x: kanonX(), y: kanonY(), vx: Math.cos(a) * 9, vy: Math.sin(a) * 9 });
+      }
+      sfx('schot');
+    }
+  }
+
+  function updateVijand(v) {
+    v.t++;
+    if (v.flits > 0) v.flits--;
+    v.draai += 0.02;
+    if (v.terug > 0) { v.terug--; v.d += v.terug * 0.25; }            // teruggekaatst door het schild
+    else if (v.soort === 'kruiser') {
+      if (v.d > v.stopD) v.d -= v.vr;
+      else {
+        v.a += 0.004 * v.draairichting;
+        if (--v.vuur <= 0) { vijandSchiet(v.x, v.y, naarPlaneet(v) + willekeurig(-0.05, 0.05), 2.4 * tempo()); v.vuur = Math.max(70, 120 - golf * 3); }
+      }
+    } else {
+      v.d -= v.vr;
+      v.a += v.va;
+      if (v.soort === 'jager' && golf >= 3 && v.d < 280 && --v.vuur <= 0) { vijandSchiet(v.x, v.y, naarPlaneet(v), 2.6); v.vuur = willekeurig(140, 220); }
+    }
+    plaats(v);
+
+    // schild: kaatst alles terug behalve bommenwerpers
+    if (v.soort !== 'bommenwerper' && v.terug <= 0 && inSchild(v.x, v.y, v.r)) {
+      v.terug = 18;
+      raakVijand(v, 1, v.x, v.y);
+      ringen.push({ x: v.x, y: v.y, r: 6, vr: 2, leven: 12, max: 12, kleur: '#22d3ee', dikte: 2 });
+      sfx('botst');
+    }
+    if (!v.dood && v.d - v.r <= PLANEET_R) {
+      planeetGeraakt(SOORTEN[v.soort].schade, CX + Math.cos(v.a) * PLANEET_R, CY + Math.sin(v.a) * PLANEET_R);
+      vijandDood(v, false);
+    }
+  }
+
+  function updateSpel() {
+    golfTijd++;
+    while (wachtrij.length && wachtrij[0].t <= golfTijd) wachtrij.shift().actie();
+    planeet.draai += 0.0025;
+    if (planeet.flits > 0) planeet.flits--;
+    for (const k in power) if (power[k] > 0) power[k]--;
+
+    if (!planeet.dood) updateKanon();
+
+    for (const k of kogels) {
+      k.x += k.vx; k.y += k.vy;
+      for (const v of vijanden) {
+        if (v.dood) continue;
+        const dx = v.x - k.x, dy = v.y - k.y, r = v.r + 3;
+        if (dx * dx + dy * dy < r * r) { raakVijand(v, 1, k.x, k.y); k.weg = true; break; }
+      }
+      if (!k.weg) for (const c of capsules) {
+        if (Math.hypot(c.x - k.x, c.y - k.y) < 16) { c.weg = true; k.weg = true; pakCapsule(c); break; }
+      }
+      if (!k.weg && baas && baas.binnen && !baas.dood && Math.hypot(baas.x - k.x, baas.y - k.y) < baas.r + 3) { raakBaas(1, k.x, k.y); k.weg = true; }
+    }
+    kogels = kogels.filter(k => !k.weg && k.x > -20 && k.x < W + 20 && k.y > -20 && k.y < H + 20);
+
+    for (const v of vijanden) updateVijand(v);
+    if (baas) updateBaas();
+
+    // vijandelijke kogels: het schild kaatst ze terug, gekaatste kogels raken vijanden
+    for (const k of vKogels) {
+      k.x += k.vx; k.y += k.vy;
+      if (!k.gekaatst) {
+        if (!planeet.dood && inSchild(k.x, k.y, k.r)) {
+          k.gekaatst = true;
+          k.vx *= -1.4; k.vy *= -1.4;
+          stats.gekaatst++;
+          vonken(k.x, k.y, '#67e8f9', 4);
+          sfx('kaats');
+        } else if (Math.hypot(k.x - CX, k.y - CY) < PLANEET_R + k.r) {
+          k.weg = true;
+          planeetGeraakt(4, k.x, k.y);
+        }
+      } else {
+        for (const v of vijanden) {
+          if (!v.dood && Math.hypot(v.x - k.x, v.y - k.y) < v.r + k.r) { raakVijand(v, 2, k.x, k.y); k.weg = true; break; }
+        }
+        if (!k.weg && baas && baas.binnen && !baas.dood && Math.hypot(baas.x - k.x, baas.y - k.y) < baas.r + k.r) { raakBaas(3, k.x, k.y); k.weg = true; }
+      }
+    }
+    vKogels = vKogels.filter(k => !k.weg && k.x > -40 && k.x < W + 40 && k.y > -40 && k.y < H + 40);
+
+    // capsules drijven naar de planeet: schiet ze voordat ze daar opbranden
+    for (const c of capsules) {
+      c.t++; c.d -= 0.32; c.a += 0.002;
+      c.x = CX + Math.cos(c.a) * c.d; c.y = CY + Math.sin(c.a) * c.d;
+      if (c.d < PLANEET_R + 10) { c.weg = true; vonken(c.x, c.y, CAPSULES[c.soort].kleur, 6); }
+    }
+    capsules = capsules.filter(c => !c.weg);
+
+    // nova: een schokgolf vanaf de planeet
+    if (novaGolf) {
+      novaGolf.r += 8;
+      for (const v of vijanden) if (!v.dood && !novaGolf.geraakt.has(v) && v.d < novaGolf.r) { novaGolf.geraakt.add(v); raakVijand(v, 10, v.x, v.y); }
+      vKogels = vKogels.filter(k => {
+        if (!k.gekaatst && Math.hypot(k.x - CX, k.y - CY) < novaGolf.r) { vonken(k.x, k.y, '#fde68a', 2); score += 10; return false; }
+        return true;
+      });
+      if (baas && !novaGolf.baasGeraakt && baas.binnen && baas.d < novaGolf.r) { novaGolf.baasGeraakt = true; raakBaas(30, baas.x, baas.y); }
+      if (novaGolf.r > 460) novaGolf = null;
+    }
+
+    vijanden = vijanden.filter(v => !v.dood);
+    if (combo.timer > 0 && --combo.timer === 0) { combo.n = 0; combo.mult = 1; }
+
+    // vuurtjes op een beschadigde planeet
+    if (planeet.hp < planeet.max * 0.5 && !planeet.dood && Math.random() < 0.25) {
+      const a = Math.random() * Math.PI * 2, r = Math.random() * PLANEET_R * 0.9;
+      deeltjes.push({ x: CX + Math.cos(a) * r, y: CY + Math.sin(a) * r, vx: willekeurig(-0.2, 0.2), vy: -0.4 - Math.random() * 0.4, leven: 25, max: 25, kleur: Math.random() < 0.5 ? '#f97316' : '#fde047', maat: 2 });
+    }
+
+    if (!golfKlaar && golfTijd > 60 && !wachtrij.length && !vijanden.length && !baas && !planeet.dood) {
+      golfKlaar = true; golfPauze = 110;
+      const bonus = golf * 250 + Math.round(planeet.hp) * 5;
+      score += bonus;
+      zweefTekst(CX, CY + 150, 'GOLF ' + golf + ' VOLTOOID  +' + getal(bonus), '#67e8f9', 18, 90);
+    }
+    if (golfKlaar && --golfPauze <= 0) startGolf(golf + 1);
+
+    // de planeet ontploft
+    if (planeet.dood) {
+      eindTimer--;
+      if (eindTimer % 7 === 0 && eindTimer > 40) { const a = Math.random() * Math.PI * 2; explosie(CX + Math.cos(a) * 30, CY + Math.sin(a) * 30, Math.random() < 0.5 ? '#f97316' : '#60a5fa', 1.6); schud(6); sfx('boem'); }
+      if (eindTimer === 40) { explosie(CX, CY, '#f97316', 7); explosie(CX, CY, '#60a5fa', 5); for (let i = 0; i < 4; i++) ringen.push({ x: CX, y: CY, r: 10, vr: 5 + i * 2.5, leven: 55, max: 55, kleur: i % 2 ? '#f97316' : '#fff', dikte: 7 }); flitsen(1); schud(16); sfx('grootBoem'); }
+      if (eindTimer <= 0) gameOver();
+    }
+  }
+
+  function gameOver() {
+    zetToestand('over');
+    sfx('gameover');
+    if (score > record) { record = score; nieuwRecord = true; recordOpslag.bewaar(record); }
+    setTimeout(() => { kanHerstart = true; }, 900);
+  }
+
+  function update() {
+    tijd++;
+    if (toestand === 'pauze') return;
+    if (toestand === 'menu') { hoek += 0.012; planeet.draai += 0.0025; }
+    if (toestand === 'spelen') updateSpel();
+    for (const d of deeltjes) { d.x += d.vx; d.y += d.vy; d.vx *= 0.97; d.vy *= 0.97; d.leven--; }
+    deeltjes = deeltjes.filter(d => d.leven > 0);
+    for (const r of ringen) { r.r += r.vr; r.leven--; }
+    ringen = ringen.filter(r => r.leven > 0);
+    for (const t of teksten) { t.y -= 0.6; t.leven--; }
+    teksten = teksten.filter(t => t.leven > 0);
+    if (banner && ++banner.tijd > banner.duur) banner = null;
+    schok = schok > 0.1 ? schok * 0.88 : 0;
+    flits = flits > 0.01 ? flits * 0.9 : 0;
+  }
+
+  /* ════════════════════════════════════════════════════════════
+     Tekenen
+  ════════════════════════════════════════════════════════════ */
+  function tekenPlaneet() {
+    if (planeet.dood && eindTimer <= 40) return;   // weggevaagd
+    spr(ctx, ATMOSFEER, CX, CY);
+    ctx.save();
+    ctx.beginPath(); ctx.arc(CX, CY, PLANEET_R, 0, Math.PI * 2); ctx.clip();
+    const off = (planeet.draai * WERELD_PX / (Math.PI * 2)) % WERELD_PX;
+    ctx.drawImage(WERELD, off, 0, WERELD_PX, WERELD_PX, CX - PLANEET_R, CY - PLANEET_R, PLANEET_R * 2, PLANEET_R * 2);
+    // schaduwkant en schade-gloed
+    const sch = ctx.createRadialGradient(CX - 16, CY - 16, 6, CX, CY, PLANEET_R * 1.05);
+    sch.addColorStop(0, 'rgba(255,255,255,0.12)'); sch.addColorStop(0.6, 'rgba(0,0,0,0)'); sch.addColorStop(1, 'rgba(0,0,20,0.65)');
+    ctx.fillStyle = sch; ctx.fillRect(CX - PLANEET_R, CY - PLANEET_R, PLANEET_R * 2, PLANEET_R * 2);
+    const schade = 1 - planeet.hp / planeet.max;
+    if (schade > 0 || planeet.flits) {
+      ctx.fillStyle = `rgba(239,68,68,${Math.min(0.6, schade * 0.45 + (planeet.flits ? 0.3 : 0))})`;
+      ctx.fillRect(CX - PLANEET_R, CY - PLANEET_R, PLANEET_R * 2, PLANEET_R * 2);
+    }
+    ctx.restore();
+    // levensring om de planeet
+    if (toestand !== 'menu') {
+      const deel = planeet.hp / planeet.max;
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+      ctx.beginPath(); ctx.arc(CX, CY, PLANEET_R + 8, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = deel > 0.5 ? '#4ade80' : deel > 0.25 ? '#facc15' : '#f87171';
+      ctx.beginPath(); ctx.arc(CX, CY, PLANEET_R + 8, -Math.PI / 2, -Math.PI / 2 + deel * Math.PI * 2); ctx.stroke();
+    }
+  }
+
+  function tekenSchildEnKanon() {
+    if (planeet.dood) return;
+    const half = schildHalf();
+    const kleur = power.breed > 0 ? '250,204,21' : '34,211,238';
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = `rgba(${kleur},0.22)`; ctx.lineWidth = 12;
+    ctx.beginPath(); ctx.arc(CX, CY, SCHILD_R, hoek - half, hoek + half); ctx.stroke();
+    ctx.strokeStyle = `rgba(${kleur},${0.75 + Math.sin(tijd * 0.2) * 0.2})`; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(CX, CY, SCHILD_R, hoek - half, hoek + half); ctx.stroke();
+    ctx.restore();
+    // baan van het kanon
+    ctx.strokeStyle = 'rgba(99,179,237,0.12)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(CX, CY, BAAN_R, 0, Math.PI * 2); ctx.stroke();
+    spr(ctx, KANON, kanonX(), kanonY(), hoek + Math.PI / 2);
+  }
+
+  function tekenHud() {
+    tk(ctx, 'SCORE', 14, 16, 10, 'rgba(144,205,244,0.7)', 'left', 600);
+    tk(ctx, getal(score), 14, 34, 20, '#fff', 'left', 800);
+    tk(ctx, 'RECORD', W - 14, 16, 10, 'rgba(144,205,244,0.7)', 'right', 600);
+    tk(ctx, getal(Math.max(record, score)), W - 14, 34, 16, '#facc15', 'right', 800);
+    tk(ctx, 'GOLF ' + golf, CX, 18, 12, 'rgba(144,205,244,0.85)', 'center', 700);
+    tk(ctx, 'PLANEET ' + Math.ceil(planeet.hp) + '%', CX, H - 16, 11, planeet.hp > 50 ? '#86efac' : planeet.hp > 25 ? '#fde047' : '#fca5a5', 'center', 800);
+    // nova's
+    for (let i = 0; i < novas; i++) { ctx.fillStyle = '#fb923c'; ctx.beginPath(); ctx.arc(W - 20 - i * 16, 58, 5.5, 0, Math.PI * 2); ctx.fill(); }
+    // actieve power-ups
+    let y = 58;
+    for (const [id, naam, kleur] of [['snel', 'SNELVUUR', '#22d3ee'], ['drie', 'DRIEDUBBEL', '#4ade80'], ['breed', 'BREED SCHILD', '#facc15']]) {
+      if (power[id] <= 0) continue;
+      tk(ctx, naam, 14, y, 10, kleur, 'left', 800);
+      ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fillRect(14, y + 8, 70, 3);
+      ctx.fillStyle = kleur; ctx.fillRect(14, y + 8, 70 * power[id] / 600, 3);
+      y += 22;
+    }
+    if (combo.mult > 1) {
+      tk(ctx, 'COMBO ×' + combo.mult, W - 14, 80, 14, '#facc15', 'right', 900);
+      ctx.fillStyle = 'rgba(250,204,21,0.25)'; ctx.fillRect(W - 84, 90, 70, 3);
+      ctx.fillStyle = '#facc15'; ctx.fillRect(W - 84, 90, 70 * combo.timer / 110, 3);
+    }
+    if (baas && baas.binnen && !baas.dood) {
+      // onderaan: het moederschip vliegt rondom en zou een balk bovenin bedekken
+      ctx.fillStyle = 'rgba(255,255,255,0.1)'; ctx.fillRect(150, H - 40, W - 300, 6);
+      ctx.fillStyle = baas.kleur; ctx.fillRect(150, H - 40, (W - 300) * Math.max(0, baas.hp / baas.max), 6);
+      tk(ctx, 'MOEDERSCHIP ' + baas.k, CX, H - 48, 9, 'rgba(255,255,255,0.7)', 'center', 700);
+    }
+  }
+
+  function tekenBanner() {
+    if (!banner) return;
+    const p = banner.tijd / banner.duur;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, p < 0.15 ? p / 0.15 : p > 0.8 ? (1 - p) / 0.2 : 1);
+    if (banner.kleur === '#f87171' && Math.floor(banner.tijd / 12) % 2 === 0) ctx.globalAlpha *= 0.55;
+    gloeiTekst(ctx, banner.t, CX, CY - 175, 34, banner.kleur, 20);
+    tk(ctx, banner.sub, CX, CY - 140, 14, 'rgba(226,232,240,0.9)', 'center', 600);
+    ctx.restore();
+  }
+
+  function knipperTekst(t, y) {
+    ctx.save(); ctx.globalAlpha = 0.55 + Math.sin(tijd * 0.08) * 0.45;
+    tk(ctx, t, CX, y, 16, '#fff', 'center', 700);
+    ctx.restore();
+  }
+
+  function tekenMenu() {
+    gloeiTekst(ctx, 'PLANEET', CX, 92, 54, '#60a5fa', 24);
+    gloeiTekst(ctx, 'VERDEDIGER', CX, 142, 36, '#4ade80', 20);
+    knipperTekst(Arcade.aanraak() ? 'Tik om te starten' : 'Klik of druk op spatie om te starten', 432);
+    const regels = Arcade.aanraak()
+      ? ['Tik of sleep waar je wilt richten — je schiet vanzelf', 'Het schild kaatst kogels en meteoren terug', 'Schiet capsules om ze te pakken · 💥 = nova']
+      : ['Richt met de muis of draai met de pijltjes', 'Het schild kaatst kogels en meteoren terug', 'Schiet capsules om ze te pakken · spatie = nova'];
+    regels.forEach((r, i) => tk(ctx, r, CX, 474 + i * 22, 13, 'rgba(144,205,244,0.85)', 'center', 500));
+    if (record) tk(ctx, 'RECORD  ' + getal(record), CX, 556, 13, '#facc15', 'center', 800);
+  }
+
+  function tekenGameOver() {
+    ctx.fillStyle = 'rgba(5,6,15,0.72)'; ctx.fillRect(0, 0, W, H);
+    gloeiTekst(ctx, 'PLANEET VERLOREN', CX, 140, 40, '#f472b6', 22);
+    tk(ctx, getal(score), CX, 210, 40, '#fff', 'center', 900);
+    tk(ctx, 'PUNTEN', CX, 240, 11, 'rgba(144,205,244,0.75)', 'center', 700);
+    if (nieuwRecord && score > 0 && Math.floor(tijd / 20) % 2 === 0) gloeiTekst(ctx, 'NIEUW RECORD!', CX, 276, 22, '#facc15', 16);
+    [['Golf bereikt', String(golf)], ['Vijanden neergeschoten', String(stats.kills)], ['Kogels teruggekaatst', String(stats.gekaatst)], ['Hoogste combo', '×' + combo.best], ['Record', getal(record)]]
+      .forEach(([k, v], i) => { tk(ctx, k, CX - 140, 322 + i * 28, 14, 'rgba(203,213,225,0.85)', 'left', 500); tk(ctx, v, CX + 140, 322 + i * 28, 14, '#fff', 'right', 800); });
+    if (kanHerstart) knipperTekst(Arcade.aanraak() ? 'Tik om opnieuw te spelen' : 'Klik of druk op spatie om opnieuw te spelen', 490);
+  }
+
+  function teken() {
+    ctx.save();
+    if (schok) ctx.translate((Math.random() * 2 - 1) * schok, (Math.random() * 2 - 1) * schok);
+    ctx.drawImage(ACHTERGROND, 0, 0, W, H);
+    tekenPlaneet();
+    for (const c of capsules) spr(ctx, CAPSULE_SPR[c.soort], c.x, c.y, Math.sin(c.t * 0.05) * 0.3);
+    for (const v of vijanden) spr(ctx, v.flits ? VIJAND_SPR[v.soort].wit : VIJAND_SPR[v.soort].gewoon, v.x, v.y, v.a - Math.PI / 2 + (v.soort === 'meteoor' || v.soort === 'brokje' ? v.draai : 0));
+    if (baas && !(baas.dood && baas.sterf > 95)) {
+      spr(ctx, baas.flits ? baas.sprWit : baas.spr, baas.x, baas.y, baas.t * 0.01);
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      const p = 10 + Math.sin(tijd * 0.2) * 3, g = ctx.createRadialGradient(baas.x, baas.y, 0, baas.x, baas.y, p * 2);
+      g.addColorStop(0, '#fff'); g.addColorStop(0.4, baas.kleur); g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(baas.x, baas.y, p * 2, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+    for (const k of kogels) spr(ctx, KOGEL, k.x, k.y);
+    tekenSchildEnKanon();   // ook in het menu: daar draait het schild als demonstratie
+    for (const k of vKogels) spr(ctx, k.gekaatst ? KOGEL_GEKAATST : KOGEL_VIJAND, k.x, k.y);
+
+    ctx.globalCompositeOperation = 'lighter';
+    for (const d of deeltjes) { ctx.globalAlpha = Math.min(1, d.leven / d.max * 1.5); ctx.fillStyle = d.kleur; ctx.fillRect(d.x - d.maat / 2, d.y - d.maat / 2, d.maat, d.maat); }
+    for (const r of ringen) { ctx.globalAlpha = r.leven / r.max; ctx.strokeStyle = r.kleur; ctx.lineWidth = r.dikte; ctx.beginPath(); ctx.arc(r.x, r.y, r.r, 0, Math.PI * 2); ctx.stroke(); }
+    if (novaGolf) {
+      ctx.globalAlpha = Math.max(0, 1 - novaGolf.r / 460);
+      ctx.strokeStyle = '#fde68a'; ctx.lineWidth = 10;
+      ctx.beginPath(); ctx.arc(CX, CY, novaGolf.r, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = '#fb923c'; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(CX, CY, novaGolf.r - 14, 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+    for (const t of teksten) { ctx.globalAlpha = Math.min(1, t.leven / t.max * 2); tk(ctx, t.t, t.x, t.y, t.maat, t.kleur, 'center', 800); }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+
+    if (toestand === 'menu') tekenMenu();
+    else {
+      tekenHud();
+      tekenBanner();
+      if (toestand === 'pauze') {
+        ctx.fillStyle = 'rgba(5,6,15,0.6)'; ctx.fillRect(0, 0, W, H);
+        gloeiTekst(ctx, 'PAUZE', CX, CY - 20, 46, '#22d3ee', 20);
+        tk(ctx, Arcade.aanraak() ? 'Tik om verder te gaan' : 'P, klik of spatie om verder te gaan', CX, CY + 30, 15, 'rgba(226,232,240,0.9)', 'center', 600);
+      }
+      if (toestand === 'over') tekenGameOver();
+    }
+    if (flits) { ctx.globalAlpha = Math.min(0.8, flits); ctx.fillStyle = flitsKleur; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
+  }
+
+  /* ════════════════════════════════════════════════════════════
+     Invoer
+  ════════════════════════════════════════════════════════════ */
+  function pauze(aan) {
+    if (toestand === 'spelen' && aan !== false) zetToestand('pauze');
+    else if (toestand === 'pauze' && aan !== true) zetToestand('spelen');
+  }
+  function primair() {
+    if (toestand === 'menu' || (toestand === 'over' && kanHerstart)) nieuwSpel();
+    else if (toestand === 'pauze') pauze(false);
+  }
+  function richtOp(e) {
+    const p = Arcade.punt(cv, e, W, H);
+    if (Math.hypot(p.x - CX, p.y - CY) > 8) doelHoek = Math.atan2(p.y - CY, p.x - CX);
+  }
+
+  window.addEventListener('keydown', e => {
+    const k = e.key.toLowerCase();
+    if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
+    toetsen[k] = true;
+    if (e.repeat) return;
+    geluid.start();
+    if (k === ' ' || k === 'enter') { if (toestand === 'spelen' && k === ' ') gebruikNova(); else primair(); }
+    else if (k === 'n' || k === 'b') gebruikNova();
+    else if (k === 'p' || k === 'escape') pauze();
+    else if (k === 'm') geluid.wissel();
+  });
+  window.addEventListener('keyup', e => { toetsen[e.key.toLowerCase()] = false; });
+  Arcade.pauzeBijWissel(() => { for (const k in toetsen) toetsen[k] = false; pauze(true); });
+
+  cv.addEventListener('pointerdown', e => {
+    geluid.start();
+    e.preventDefault();
+    if (toestand !== 'spelen') { primair(); return; }
+    richtOp(e);
+    try { cv.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+  cv.addEventListener('pointermove', e => {
+    if (toestand !== 'spelen') return;
+    if (e.pointerType === 'mouse' || e.buttons) richtOp(e);
+  });
+  document.getElementById('novaKnop').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); gebruikNova(); });
+  document.getElementById('pauzeKnop').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); pauze(); });
+
+  leegSpel();
+  Arcade.lus(update, teken);
+  </script>
+</body>
+</html>
