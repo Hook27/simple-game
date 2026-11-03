@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Neontunnel</title>
+  <link rel="icon" href="icons/neontunnel.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="stijl.css">
+  <link rel="stylesheet" href="arcade.css">
+  <script src="nav.js" defer></script>
+  <script src="arcade.js"></script>
+  <style>
+    /* turboknop onderaan in het midden, pauze rechtsboven: links en rechts zijn stuurvlakken */
+    #turboKnop { left: 50%; transform: translateX(-50%); width: 76px; font-size: 1rem; font-weight: 800; border-radius: 29px; }
+    #turboKnop.aan { background: rgba(232,121,249,0.45); border-color: #e879f9; }
+    #pauzeKnop { top: 12px; right: 12px; bottom: auto; width: 46px; height: 46px; font-size: 1rem; }
+  </style>
+</head>
+<body data-toestand="menu">
+
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-logo">🎮 <span>Spelletjes</span></a>
+      <a href="geheugen-spel.html" class="nav-tab">Geheugen spel</a>
+      <a href="vier-op-rij.html" class="nav-tab">Vier op een rij</a>
+      <a href="rots-papier-schaar.html" class="nav-tab">Rots-Papier-Schaar</a>
+      <a href="pixel-breakout.html" class="nav-tab">Pixel Breakout</a>
+      <a href="boter-kaas-en-eieren.html" class="nav-tab">Boter-kaas-en-eieren</a>
+      <a href="galgje.html" class="nav-tab">Galgje</a>
+      <a href="slang.html" class="nav-tab">Slang</a>
+      <a href="mijnenveger.html" class="nav-tab">Mijnenveger</a>
+      <a href="neon-sterrenjager.html" class="nav-tab">Sterrenjager</a>
+      <a href="planeetverdediger.html" class="nav-tab">Planeetverdediger</a>
+      <a href="neontunnel.html" class="nav-tab actief">Neontunnel</a>
+      <a href="sterrensprong.html" class="nav-tab">Sterrensprong</a>
+    </div>
+  </nav>
+
+  <div id="wrap">
+    <div id="spel">
+      <canvas id="cv"></canvas>
+      <button class="aanraak-knop" id="pauzeKnop" type="button" aria-label="Pauze">⏸</button>
+      <button class="aanraak-knop" id="turboKnop" type="button" aria-label="Turbo">TURBO</button>
+    </div>
+  </div>
+
+  <div class="onderbalk">
+    <button class="geluid-knop" id="geluidKnop" type="button">🔊 Geluid</button>
+    <span class="toetsen">Pijltjes/A-D of muisknop links/rechts = draaien · spatie of ↑ ingedrukt = turbo · P = pauze</span>
+    <span class="aanraak">Houd links of rechts ingedrukt om te draaien · houd TURBO vast voor extra snelheid</span>
+  </div>
+
+  <script>
+  "use strict";
+  const { tekenSprite: spr, tekst: tk, gloeiTekst, getal, willekeurig } = Arcade;
+
+  /* ════════════════════════════════════════════════════════════
+     De tunnel: 12 vakken rondom. Alles in de wereld heeft een diepte z;
+     de camera staat op z = 0 en de speler rijdt op z = Z_SPELER.
+     Een punt op diepte z staat op straal F / z van het midden.
+  ════════════════════════════════════════════════════════════ */
+  const W = 480, H = 640;
+  const N = 12, VAK = Math.PI * 2 / N;
+  const F = 250, Z_SPELER = 1.6, Z_VER = 30, Z_DICHT = 0.75;
+  const BINNEN = 0.52;                       // obstakels steken van de wand tot 52% van de straal naar binnen
+  const cv = document.getElementById('cv');
+  const ctx = Arcade.maakCanvas(cv, W, H);
+  const geluid = Arcade.maakGeluid('nt-geluid', document.getElementById('geluidKnop'));
+  const recordOpslag = Arcade.record('nt-record');
+
+  function sfx(soort, x) {
+    const g = geluid;
+    switch (soort) {
+      case 'bol':     g.toon(660 * Math.pow(1.06, Math.min(12, x || 0)), 0.09, 'triangle', 0.1); break;
+      case 'precies': if (g.mag(soort, 120)) { g.toon(1200, 0.12, 'sine', 0.08, 2400); g.knal(0.15, 0.08, 6000, 2000); } break;
+      case 'crash':   g.knal(0.8, 0.7, 2400); g.toon(300, 0.6, 'sawtooth', 0.2, 40); break;
+      case 'turbo':   if (g.mag(soort, 300)) { g.knal(0.5, 0.15, 4000, 300); g.toon(200, 0.4, 'sawtooth', 0.05, 600); } break;
+      case 'mijlpaal': [523, 659, 784, 1047].forEach((f, i) => g.toon(f, 0.13, 'square', 0.08, null, i * 0.08)); break;
+      case 'gameover': [392, 311, 247, 196].forEach((f, i) => g.toon(f, 0.35, 'sawtooth', 0.12, null, i * 0.2)); break;
+    }
+  }
+
+  /* ── Sprites ── */
+  const SCHIP = Arcade.sprite(60, 40, g => {
+    Arcade.neon(g, () => Arcade.poly(g, [[0, -10], [24, 6], [10, 10], [-10, 10], [-24, 6]]), '#22d3ee', 2.5, 14, 'rgba(14,50,80,0.92)');
+    g.fillStyle = '#e0f2fe'; g.beginPath(); g.ellipse(0, 2, 6, 3, 0, 0, Math.PI * 2); g.fill();
+  });
+
+  /* ════════════════════════════════════════════════════════════
+     Spelstaat
+  ════════════════════════════════════════════════════════════ */
+  let toestand = 'menu', tijd = 0;
+  let theta, omega, afstand, snelheid, basisSnelheid, turbo, energie, schild, inv, score, combo;
+  let obstakels, bollen, deeltjes, teksten, volgende, mijlpaal, banner, stats, remmen;
+  let schok = 0, flits = 0, flitsKleur = '#fff', eindTimer = 0, kanHerstart = false, nieuwRecord = false;
+  let record = recordOpslag.lees();
+
+  function zetToestand(t) { toestand = t; document.body.dataset.toestand = t; }
+
+  function leegSpel() {
+    theta = VAK / 2; omega = 0; afstand = 0; basisSnelheid = 0.14; snelheid = 0.14; turbo = false; energie = 40;
+    schild = 3; inv = 0; score = 0; combo = 0; remmen = 0; eindTimer = 0;
+    obstakels = []; bollen = []; deeltjes = []; teksten = []; volgende = 8; mijlpaal = 500; banner = null;
+    stats = { bollen: 0, precies: 0 };
+  }
+  function nieuwSpel() {
+    geluid.start();
+    leegSpel();
+    schok = 0; flits = 0; kanHerstart = false; nieuwRecord = false;
+    zetToestand('spelen');
+    zetBanner('KLAAR?', 'Ontwijk de blokken!', '#22d3ee', 110);
+  }
+
+  const mod = (a, n) => ((a % n) + n) % n;
+  const vakVan = hoek => Math.floor(mod(hoek, Math.PI * 2) / VAK);
+  const meter = () => Math.floor(afstand * 2);
+
+  /* ── Obstakels en patronen ────────────────── */
+  // blok: array van 12 booleans (welke vakken dicht zijn); draai: vakken per eenheid afstand
+  function obstakel(z, dicht, extra = {}) { obstakels.push({ z, dicht, draai: 0, fase: 0, ...extra }); }
+  function vakken(start, n) { const d = Array(N).fill(false); for (let i = 0; i < n; i++) d[mod(start + i, N)] = true; return d; }
+  function isDicht(o, k) {
+    if (!o.draai) return o.dicht[k];
+    const verschuiving = Math.round(o.fase);   // o.fase loopt elk beeld op met o.draai
+    return o.dicht[mod(k - verschuiving, N)];
+  }
+  function bollenRij(z, vak, n, stap = 1.1, kronkel = 0) {
+    for (let i = 0; i < n; i++) bollen.push({ z: z + i * stap, vak: mod(vak + Math.round(i * kronkel), N) });
+  }
+
+  function niveau() { return Math.min(6, Math.floor(afstand / 160)); }
+  // de afstand die de tunnel in `beelden` frames aflegt bij de huidige snelheid. Ruimte tussen
+  // obstakels wordt zo in tijd gemeten: hoe hard je ook gaat, je hebt altijd tijd om te draaien.
+  const inBeelden = beelden => Math.max(0.12, basisSnelheid) * beelden;
+  function spelerVak() { return vakVan(theta); }
+
+  function spawnPatroon() {
+    const z = Z_VER, s0 = Math.floor(Math.random() * N), nv = niveau();
+    const pot = ['blok', 'blok', 'gat', 'tralies'];
+    if (nv >= 1) pot.push('spiraal', 'slalom');
+    if (nv >= 2) pot.push('draaier', 'half');
+    if (nv >= 3) pot.push('spiraal', 'draaier', 'gat');
+    const keus = pot[Math.floor(Math.random() * pot.length)];
+    let lengte = 1;
+    switch (keus) {
+      case 'blok': {
+        const n = 2 + Math.floor(Math.random() * (nv >= 2 ? 4 : 3));
+        obstakel(z, vakken(s0, n));
+        bollenRij(z - 1.5, s0 + n + 1, 3);
+        break;
+      }
+      case 'gat': {
+        const gat = nv >= 3 ? 2 : 3;
+        obstakel(z, vakken(s0 + gat, N - gat));
+        bollen.push({ z, vak: s0 + 1 });
+        break;
+      }
+      case 'tralies': {
+        const d = Array(N).fill(false);
+        for (let k = 0; k < N; k++) d[k] = (k + s0) % 2 === 0;
+        obstakel(z, d);
+        break;
+      }
+      case 'spiraal': {
+        const richting = Math.random() < 0.5 ? 1 : -1, n = 5 + nv;
+        const stap = inBeelden(11);
+        for (let i = 0; i < n; i++) obstakel(z + i * stap, vakken(s0 + i * richting, 4 + (nv >= 4 ? 1 : 0)));
+        bollenRij(z, s0 + 6, n, stap, richting);
+        lengte = n * stap;
+        break;
+      }
+      case 'slalom': {
+        // de gaten liggen tegenover elkaar: een halve draai kost ruim 35 beelden
+        const stap = inBeelden(46);
+        for (let i = 0; i < 3; i++) obstakel(z + i * stap, vakken(s0 + (i % 2) * 6, 7));
+        lengte = 2 * stap;
+        break;
+      }
+      case 'draaier': {
+        const d = Array(N).fill(false);
+        for (let k = 0; k < 3; k++) { d[k] = true; d[k + 6] = true; }
+        // draait met een vaste snelheid per beeld (niet per afstand), zodat je hem kunt bijhouden
+        obstakel(z, d, { draai: (Math.random() < 0.5 ? 1 : -1) * (0.035 + nv * 0.004), fase: s0 });
+        break;
+      }
+      case 'half': {
+        obstakel(z, vakken(s0, 6));
+        obstakel(z + inBeelden(36), vakken(s0 + 6, 6));
+        lengte = inBeelden(36);
+        break;
+      }
+    }
+    // ruimte tot het volgende patroon wordt kleiner naarmate je verder komt
+    volgende = lengte + inBeelden(Math.max(40, 64 - nv * 4) + Math.random() * 14);
+  }
+
+  /* ── Effecten ─────────────────────────────── */
+  function schud(k) { schok = Math.min(16, Math.max(schok, k)); }
+  function flitsen(s, k = '#fff') { flits = Math.max(flits, s); flitsKleur = k; }
+  function zweefTekst(x, y, t, kleur = '#fff', maat = 14, leven = 50) {
+    if (teksten.length > 30) teksten.shift();
+    teksten.push({ x, y, t, kleur, maat, leven, max: leven });
+  }
+  function zetBanner(t, sub, kleur, duur) { banner = { t, sub, kleur, tijd: 0, duur }; }
+  function vonken(x, y, kleur, n, kracht = 3) {
+    for (let i = 0; i < n && deeltjes.length < 700; i++) {
+      const a = Math.random() * Math.PI * 2, s = Math.random() * kracht + 0.5;
+      deeltjes.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, leven: 20 + Math.random() * 20, max: 40, kleur, maat: 2 + Math.random() * 1.5 });
+    }
+  }
+
+  /* ── Projectie ────────────────────────────── */
+  let bochtX = 0, bochtY = 0;
+  function midden(z) {
+    const k = (z / Z_VER) * (z / Z_VER);
+    return [W / 2 + bochtX * k * 150, H * 0.47 + bochtY * k * 100];
+  }
+  const straal = z => F / z;
+  // schermpositie van wereldhoek phi op diepte z, op fractie f van de straal
+  function punt(phi, z, f = 1) {
+    const [mx, my] = midden(z), r = straal(z) * f, a = phi - theta + Math.PI / 2;
+    return [mx + Math.cos(a) * r, my + Math.sin(a) * r];
+  }
+  const spelerPos = () => punt(theta, Z_SPELER, 0.84);
+
+  /* ════════════════════════════════════════════════════════════
+     Update
+  ════════════════════════════════════════════════════════════ */
+  const toetsen = {};
+  const sturen = new Map();     // aanwijzer-id → richting (+1 links, -1 rechts)
+  let turboKnop = false;
+
+  function stuurRichting() {
+    let r = (toetsen.arrowleft || toetsen.a ? 1 : 0) - (toetsen.arrowright || toetsen.d ? 1 : 0);
+    for (const v of sturen.values()) r += v;
+    return Math.max(-1, Math.min(1, r));
+  }
+
+  function raak() {
+    if (inv > 0) return;
+    schild--;
+    inv = 90;
+    combo = 0;
+    remmen = 50;
+    const [x, y] = spelerPos();
+    vonken(x, y, '#f472b6', 40, 6);
+    vonken(x, y, '#fff', 15, 4);
+    schud(14);
+    flitsen(0.6, '#f87171');
+    sfx('crash');
+    if (schild <= 0) { eindTimer = 80; inv = 999; }
+  }
+
+  function updateSpel() {
+    if (eindTimer > 0) {
+      snelheid *= 0.93;
+      afstand += snelheid;
+      if (--eindTimer === 0) gameOver();
+      return;
+    }
+    // sturen: met traagheid, zodat het soepel voelt
+    omega += stuurRichting() * 0.013;
+    omega *= 0.86;
+    theta += omega;
+
+    basisSnelheid = Math.min(0.36, 0.14 + afstand * 0.00016);
+    const wilTurbo = toetsen[' '] || toetsen.arrowup || toetsen.w || turboKnop;
+    if (wilTurbo && energie > 0) { if (!turbo) sfx('turbo'); turbo = true; energie = Math.max(0, energie - 0.55); }
+    else turbo = false;
+    document.getElementById('turboKnop').classList.toggle('aan', turbo);
+    const doel = basisSnelheid * (turbo ? 1.65 : 1) * (remmen > 0 ? 0.55 : 1);
+    if (remmen > 0) remmen--;
+    snelheid += (doel - snelheid) * 0.08;
+    afstand += snelheid;
+    score += snelheid * 10 * (turbo ? 2 : 1);
+    if (inv > 0) inv--;
+
+    bochtX = Math.sin(afstand * 0.012) * (0.7 + niveau() * 0.08);
+    bochtY = Math.sin(afstand * 0.0085 + 1.3) * 0.7;
+
+    volgende -= snelheid;
+    if (volgende <= 0) spawnPatroon();
+
+    const vak = spelerVak();
+    for (const o of obstakels) {
+      const oud = o.z;
+      o.z -= snelheid;
+      if (o.draai) o.fase += o.draai;
+      if (oud > Z_SPELER && o.z <= Z_SPELER) {
+        if (isDicht(o, vak)) raak();
+        else if (isDicht(o, mod(vak - 1, N)) && isDicht(o, mod(vak + 1, N))) {
+          stats.precies++;
+          score += 100;
+          const [x, y] = spelerPos();
+          zweefTekst(x, y - 40, 'PRECIES! +100', '#facc15', 15, 45);
+          sfx('precies');
+        }
+      }
+    }
+    obstakels = obstakels.filter(o => o.z > Z_DICHT - 0.6);
+
+    for (const b of bollen) {
+      const oud = b.z;
+      b.z -= snelheid;
+      if (!b.weg && oud > Z_SPELER && b.z <= Z_SPELER && mod(b.vak, N) === vak) {
+        b.weg = true;
+        combo++;
+        stats.bollen++;
+        energie = Math.min(100, energie + 9);
+        const p = 50 * Math.min(8, 1 + Math.floor(combo / 5));
+        score += p;
+        const [x, y] = spelerPos();
+        vonken(x, y - 10, '#e879f9', 10);
+        zweefTekst(x, y - 30, '+' + p, '#f0abfc', 12, 35);
+        sfx('bol', combo);
+      } else if (!b.weg && oud > Z_SPELER && b.z <= Z_SPELER) combo = 0;
+    }
+    bollen = bollen.filter(b => !b.weg && b.z > Z_DICHT);
+
+    // vuurstraal en snelheidsstrepen
+    const [sx, sy] = spelerPos();
+    if (tijd % 2 === 0) deeltjes.push({ x: sx + willekeurig(-8, 8), y: sy + 10, vx: willekeurig(-0.5, 0.5), vy: 1 + Math.random(), leven: 14, max: 14, kleur: turbo ? '#f0abfc' : '#22d3ee', maat: 2.5 });
+
+    if (meter() >= mijlpaal) {
+      zetBanner(getal(mijlpaal) + ' METER', ['Sneller!', 'Hou vol!', 'Wat een vaart!', 'Ongelooflijk!'][Math.floor(mijlpaal / 500) % 4], '#e879f9', 110);
+      sfx('mijlpaal');
+      mijlpaal += 500;
+    }
+  }
+
+  function gameOver() {
+    zetToestand('over');
+    sfx('gameover');
+    if (score > record) { record = Math.floor(score); nieuwRecord = true; recordOpslag.bewaar(record); }
+    setTimeout(() => { kanHerstart = true; }, 900);
+  }
+
+  function update() {
+    tijd++;
+    if (toestand === 'pauze') return;
+    if (toestand === 'spelen') updateSpel();
+    else {
+      // menu en game over: de tunnel blijft rustig doorlopen
+      afstand += 0.08; theta += 0.004;
+      bochtX = Math.sin(afstand * 0.012) * 0.7; bochtY = Math.sin(afstand * 0.0085 + 1.3) * 0.7;
+      for (const o of obstakels) o.z -= 0.08;
+      obstakels = obstakels.filter(o => o.z > Z_DICHT - 0.6);
+      if (toestand === 'menu' && obstakels.length < 6) obstakel(Z_VER, vakken(Math.floor(Math.random() * N), 3));
+    }
+    for (const d of deeltjes) { d.x += d.vx; d.y += d.vy; d.vx *= 0.96; d.vy *= 0.96; d.leven--; }
+    deeltjes = deeltjes.filter(d => d.leven > 0);
+    for (const t of teksten) { t.y -= 0.7; t.leven--; }
+    teksten = teksten.filter(t => t.leven > 0);
+    if (banner && ++banner.tijd > banner.duur) banner = null;
+    schok = schok > 0.1 ? schok * 0.88 : 0;
+    flits = flits > 0.01 ? flits * 0.9 : 0;
+  }
+
+  /* ════════════════════════════════════════════════════════════
+     Tekenen
+  ════════════════════════════════════════════════════════════ */
+  function kleurTint() { return (190 + afstand * 0.35) % 360; }
+
+  function tekenTunnel() {
+    const tint = kleurTint();
+    // ringen van ver naar dichtbij; elke ring is een twaalfhoek
+    const ringen = [];
+    const frac = afstand % 1;
+    for (let j = Z_VER; j >= 1; j--) {
+      const z = j - frac;
+      if (z < Z_DICHT) continue;
+      const pts = [];
+      for (let k = 0; k < N; k++) pts.push(punt(k * VAK, z));
+      ringen.push({ z, pts });
+    }
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i < ringen.length; i++) {
+      const { z, pts } = ringen[i];
+      const helder = Math.max(0, 1 - z / Z_VER);
+      // lijnen in de lengte naar de volgende (dichterbij gelegen) ring
+      if (i + 1 < ringen.length) {
+        const volg = ringen[i + 1].pts;
+        ctx.strokeStyle = `hsla(${tint},90%,60%,${helder * 0.45})`;
+        ctx.beginPath();
+        for (let k = 0; k < N; k++) { ctx.moveTo(pts[k][0], pts[k][1]); ctx.lineTo(volg[k][0], volg[k][1]); }
+        ctx.stroke();
+      }
+      ctx.strokeStyle = `hsla(${(tint + z * 4) % 360},95%,62%,${helder * 0.8})`;
+      ctx.beginPath();
+      pts.forEach(([x, y], k) => k ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+      ctx.closePath();
+      ctx.stroke();
+    }
+  }
+
+  function tekenObstakel(o) {
+    if (o.z < Z_DICHT || o.z > Z_VER) return;
+    const tint = (kleurTint() + 160) % 360;
+    const helder = Math.max(0.15, 1 - o.z / Z_VER);
+    const diepte = 0.55;
+    for (let k = 0; k < N; k++) {
+      if (!isDicht(o, k)) continue;
+      const a0 = k * VAK, a1 = (k + 1) * VAK;
+      // voorkant: van de wand tot BINNEN, achterkant op z + diepte
+      const v = [punt(a0, o.z), punt(a1, o.z), punt(a1, o.z, BINNEN), punt(a0, o.z, BINNEN)];
+      const z2 = o.z + diepte;
+      const a = [punt(a0, z2), punt(a1, z2), punt(a1, z2, BINNEN), punt(a0, z2, BINNEN)];
+      // binnenkant (bovenvlak dat naar het midden kijkt)
+      ctx.fillStyle = `hsla(${tint},85%,${30 * helder + 10}%,0.9)`;
+      ctx.beginPath(); ctx.moveTo(...v[3]); ctx.lineTo(...v[2]); ctx.lineTo(...a[2]); ctx.lineTo(...a[3]); ctx.closePath(); ctx.fill();
+      // voorkant
+      ctx.fillStyle = `hsla(${tint},90%,${45 * helder + 8}%,0.92)`;
+      ctx.beginPath(); v.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = `hsla(${tint},100%,75%,${helder})`;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+  }
+
+  function tekenBol(b) {
+    if (b.z < Z_DICHT || b.z > Z_VER) return;
+    const [x, y] = punt((mod(b.vak, N) + 0.5) * VAK, b.z, 0.84);
+    const r = Math.max(1.5, 26 / b.z);
+    const helder = Math.max(0.2, 1 - b.z / Z_VER);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r * 2.2);
+    g.addColorStop(0, `rgba(255,255,255,${helder})`);
+    g.addColorStop(0.35, `rgba(232,121,249,${helder})`);
+    g.addColorStop(1, 'rgba(232,121,249,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(x, y, r * 2.2, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  function tekenSpeler() {
+    if (toestand === 'menu') return;
+    if (eindTimer > 0 && Math.floor(eindTimer / 3) % 2) return;
+    if (inv > 0 && eindTimer === 0 && Math.floor(inv / 4) % 2) return;
+    const [x, y] = spelerPos();
+    spr(ctx, SCHIP, x, y, -omega * 3);
+    if (turbo) {
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = 'rgba(232,121,249,0.35)';
+      ctx.beginPath(); ctx.ellipse(x, y + 14, 16, 6 + Math.random() * 4, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  function tekenSnelheidsstrepen() {
+    const n = turbo ? 26 : Math.floor(snelheid * 30);
+    if (!n) return;
+    const [mx, my] = midden(Z_VER * 0.5);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = turbo ? 'rgba(240,171,252,0.35)' : 'rgba(165,243,252,0.18)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2, r0 = 60 + Math.random() * 200, l = 30 + Math.random() * (turbo ? 120 : 60);
+      ctx.moveTo(mx + Math.cos(a) * r0, my + Math.sin(a) * r0);
+      ctx.lineTo(mx + Math.cos(a) * (r0 + l), my + Math.sin(a) * (r0 + l));
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function tekenHud() {
+    tk(ctx, 'SCORE', 14, 16, 10, 'rgba(144,205,244,0.7)', 'left', 600);
+    tk(ctx, getal(score), 14, 34, 20, '#fff', 'left', 800);
+    const ry = Arcade.aanraak() ? 66 : 0;   // op aanraakschermen staat rechtsboven de pauzeknop
+    tk(ctx, 'RECORD', W - 14, 16 + ry, 10, 'rgba(144,205,244,0.7)', 'right', 600);
+    tk(ctx, getal(Math.max(record, score)), W - 14, 34 + ry, 16, '#facc15', 'right', 800);
+    tk(ctx, getal(meter()) + ' m', W / 2, 20, 14, '#e2e8f0', 'center', 800);
+    tk(ctx, Math.round(snelheid * 600) + ' km/u', W / 2, 38, 10, turbo ? '#f0abfc' : 'rgba(144,205,244,0.75)', 'center', 700);
+    // schild
+    for (let i = 0; i < 3; i++) {
+      ctx.fillStyle = i < schild ? '#22d3ee' : 'rgba(34,211,238,0.15)';
+      ctx.beginPath(); ctx.arc(20 + i * 18, 58, 6, 0, Math.PI * 2); ctx.fill();
+    }
+    // turbo-energie
+    ctx.fillStyle = 'rgba(232,121,249,0.18)'; ctx.fillRect(W - 104, 54 + ry, 90, 6);
+    ctx.fillStyle = '#e879f9'; ctx.fillRect(W - 104, 54 + ry, 90 * energie / 100, 6);
+    tk(ctx, 'TURBO', W - 108, 57 + ry, 9, 'rgba(240,171,252,0.85)', 'right', 800);
+  }
+
+  function tekenBanner() {
+    if (!banner) return;
+    const p = banner.tijd / banner.duur;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, p < 0.15 ? p / 0.15 : p > 0.8 ? (1 - p) / 0.2 : 1);
+    gloeiTekst(ctx, banner.t, W / 2, H * 0.25, 34, banner.kleur, 20);
+    tk(ctx, banner.sub, W / 2, H * 0.25 + 34, 14, 'rgba(226,232,240,0.9)', 'center', 600);
+    ctx.restore();
+  }
+
+  function knipper(t, y) {
+    ctx.save(); ctx.globalAlpha = 0.55 + Math.sin(tijd * 0.08) * 0.45;
+    tk(ctx, t, W / 2, y, 16, '#fff', 'center', 700);
+    ctx.restore();
+  }
+
+  function tekenMenu() {
+    ctx.fillStyle = 'rgba(5,6,15,0.35)'; ctx.fillRect(0, 0, W, H);
+    gloeiTekst(ctx, 'NEON', W / 2, 150, 64, '#22d3ee', 26);
+    gloeiTekst(ctx, 'TUNNEL', W / 2, 210, 48, '#e879f9', 22);
+    knipper(Arcade.aanraak() ? 'Tik om te starten' : 'Klik of druk op spatie om te starten', 400);
+    const regels = Arcade.aanraak()
+      ? ['Houd links of rechts ingedrukt om te draaien', 'Pak de roze bollen voor turbo-energie', 'Houd TURBO vast voor dubbele punten']
+      : ['Draai met de pijltjes of A/D', 'Pak de roze bollen voor turbo-energie', 'Houd spatie of ↑ vast voor turbo: dubbele punten'];
+    regels.forEach((r, i) => tk(ctx, r, W / 2, 450 + i * 24, 13, 'rgba(203,213,225,0.9)', 'center', 500));
+    tk(ctx, 'Je schild houdt 3 botsingen tegen', W / 2, 530, 12, 'rgba(144,205,244,0.75)', 'center', 500);
+    if (record) tk(ctx, 'RECORD  ' + getal(record), W / 2, 580, 13, '#facc15', 'center', 800);
+  }
+
+  function tekenGameOver() {
+    ctx.fillStyle = 'rgba(5,6,15,0.72)'; ctx.fillRect(0, 0, W, H);
+    gloeiTekst(ctx, 'CRASH!', W / 2, 150, 54, '#f472b6', 24);
+    tk(ctx, getal(score), W / 2, 225, 40, '#fff', 'center', 900);
+    tk(ctx, 'PUNTEN', W / 2, 255, 11, 'rgba(144,205,244,0.75)', 'center', 700);
+    if (nieuwRecord && score > 0 && Math.floor(tijd / 20) % 2 === 0) gloeiTekst(ctx, 'NIEUW RECORD!', W / 2, 292, 22, '#facc15', 16);
+    [['Afstand', getal(meter()) + ' m'], ['Bollen gepakt', String(stats.bollen)], ['Precies erdoor', String(stats.precies)], ['Record', getal(record)]]
+      .forEach(([k, v], i) => { tk(ctx, k, W / 2 - 130, 340 + i * 28, 14, 'rgba(203,213,225,0.85)', 'left', 500); tk(ctx, v, W / 2 + 130, 340 + i * 28, 14, '#fff', 'right', 800); });
+    if (kanHerstart) knipper(Arcade.aanraak() ? 'Tik om opnieuw te spelen' : 'Klik of druk op spatie om opnieuw te spelen', 490);
+  }
+
+  function teken() {
+    ctx.save();
+    if (schok) ctx.translate((Math.random() * 2 - 1) * schok, (Math.random() * 2 - 1) * schok);
+    ctx.fillStyle = '#04040c';
+    ctx.fillRect(-20, -20, W + 40, H + 40);
+    // gloed in de verte
+    const [vx, vy] = midden(Z_VER);
+    const g = ctx.createRadialGradient(vx, vy, 0, vx, vy, 160);
+    g.addColorStop(0, `hsla(${kleurTint()},90%,60%,0.35)`); g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+    tekenTunnel();
+    if (toestand !== 'menu') tekenSnelheidsstrepen();
+    // obstakels en bollen samen van ver naar dichtbij
+    const dingen = [...obstakels.map(o => ({ z: o.z, o })), ...bollen.map(b => ({ z: b.z, b }))].sort((a, b) => b.z - a.z);
+    for (const d of dingen) {
+      if (d.z < Z_SPELER - 0.05) continue;   // wat al voorbij de speler is, komt over hem heen
+      d.o ? tekenObstakel(d.o) : tekenBol(d.b);
+    }
+    tekenSpeler();
+    for (const d of dingen) if (d.z < Z_SPELER - 0.05) d.o ? tekenObstakel(d.o) : tekenBol(d.b);
+
+    ctx.globalCompositeOperation = 'lighter';
+    for (const d of deeltjes) { ctx.globalAlpha = Math.min(1, d.leven / d.max * 1.5); ctx.fillStyle = d.kleur; ctx.fillRect(d.x - d.maat / 2, d.y - d.maat / 2, d.maat, d.maat); }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+    for (const t of teksten) { ctx.globalAlpha = Math.min(1, t.leven / t.max * 2); tk(ctx, t.t, t.x, t.y, t.maat, t.kleur, 'center', 800); }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+
+    if (toestand === 'menu') tekenMenu();
+    else {
+      tekenHud();
+      tekenBanner();
+      if (toestand === 'pauze') {
+        ctx.fillStyle = 'rgba(5,6,15,0.6)'; ctx.fillRect(0, 0, W, H);
+        gloeiTekst(ctx, 'PAUZE', W / 2, H / 2 - 20, 46, '#22d3ee', 20);
+        tk(ctx, Arcade.aanraak() ? 'Tik om verder te gaan' : 'P, klik of spatie om verder te gaan', W / 2, H / 2 + 30, 15, 'rgba(226,232,240,0.9)', 'center', 600);
+      }
+      if (toestand === 'over') tekenGameOver();
+    }
+    if (flits) { ctx.globalAlpha = Math.min(0.8, flits); ctx.fillStyle = flitsKleur; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
+  }
+
+  /* ════════════════════════════════════════════════════════════
+     Invoer
+  ════════════════════════════════════════════════════════════ */
+  function pauze(aan) {
+    if (toestand === 'spelen' && aan !== false) { zetToestand('pauze'); sturen.clear(); turboKnop = false; }
+    else if (toestand === 'pauze' && aan !== true) zetToestand('spelen');
+  }
+  function primair() {
+    if (toestand === 'menu' || (toestand === 'over' && kanHerstart)) nieuwSpel();
+    else if (toestand === 'pauze') pauze(false);
+  }
+
+  window.addEventListener('keydown', e => {
+    const k = e.key.toLowerCase();
+    if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
+    toetsen[k] = true;
+    if (e.repeat) return;
+    geluid.start();
+    if ((k === ' ' || k === 'enter') && toestand !== 'spelen') primair();
+    else if (k === 'p' || k === 'escape') pauze();
+    else if (k === 'm') geluid.wissel();
+  });
+  window.addEventListener('keyup', e => { toetsen[e.key.toLowerCase()] = false; });
+  Arcade.pauzeBijWissel(() => { for (const k in toetsen) toetsen[k] = false; pauze(true); });
+
+  // links of rechts van het midden ingedrukt houden = die kant op draaien
+  cv.addEventListener('pointerdown', e => {
+    geluid.start();
+    e.preventDefault();
+    if (toestand !== 'spelen') { primair(); return; }
+    const p = Arcade.punt(cv, e, W, H);
+    sturen.set(e.pointerId, p.x < W / 2 ? 1 : -1);
+    try { cv.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+  cv.addEventListener('pointermove', e => {
+    if (!sturen.has(e.pointerId)) return;
+    const p = Arcade.punt(cv, e, W, H);
+    sturen.set(e.pointerId, p.x < W / 2 ? 1 : -1);
+  });
+  const loslaten = e => sturen.delete(e.pointerId);
+  cv.addEventListener('pointerup', loslaten);
+  cv.addEventListener('pointercancel', loslaten);
+
+  const tk_ = document.getElementById('turboKnop');
+  tk_.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); turboKnop = true; try { tk_.setPointerCapture(e.pointerId); } catch (err) {} });
+  for (const ev of ['pointerup', 'pointercancel']) tk_.addEventListener(ev, () => { turboKnop = false; });
+  document.getElementById('pauzeKnop').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); pauze(); });
+
+  leegSpel();
+  // een paar obstakels in de verte voor het menu
+  for (let i = 0; i < 6; i++) obstakel(6 + i * 4, vakken(i * 3, 3));
+  Arcade.lus(update, teken);
+  </script>
+</body>
+</html>

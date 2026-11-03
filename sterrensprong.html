@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Sterrensprong</title>
+  <link rel="icon" href="icons/sterrensprong.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="stijl.css">
+  <link rel="stylesheet" href="arcade.css">
+  <script src="nav.js" defer></script>
+  <script src="arcade.js"></script>
+  <style>
+    #pauzeKnop { top: 12px; right: 12px; bottom: auto; width: 46px; height: 46px; font-size: 1rem; }
+  </style>
+</head>
+<body data-toestand="menu">
+
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-logo">🎮 <span>Spelletjes</span></a>
+      <a href="geheugen-spel.html" class="nav-tab">Geheugen spel</a>
+      <a href="vier-op-rij.html" class="nav-tab">Vier op een rij</a>
+      <a href="rots-papier-schaar.html" class="nav-tab">Rots-Papier-Schaar</a>
+      <a href="pixel-breakout.html" class="nav-tab">Pixel Breakout</a>
+      <a href="boter-kaas-en-eieren.html" class="nav-tab">Boter-kaas-en-eieren</a>
+      <a href="galgje.html" class="nav-tab">Galgje</a>
+      <a href="slang.html" class="nav-tab">Slang</a>
+      <a href="mijnenveger.html" class="nav-tab">Mijnenveger</a>
+      <a href="neon-sterrenjager.html" class="nav-tab">Sterrenjager</a>
+      <a href="planeetverdediger.html" class="nav-tab">Planeetverdediger</a>
+      <a href="neontunnel.html" class="nav-tab">Neontunnel</a>
+      <a href="sterrensprong.html" class="nav-tab actief">Sterrensprong</a>
+    </div>
+  </nav>
+
+  <div id="wrap">
+    <div id="spel">
+      <canvas id="cv"></canvas>
+      <button class="aanraak-knop" id="pauzeKnop" type="button" aria-label="Pauze">⏸</button>
+    </div>
+  </div>
+
+  <div class="onderbalk">
+    <button class="geluid-knop" id="geluidKnop" type="button">🔊 Geluid</button>
+    <span class="toetsen">Muis of pijltjes/A-D = links en rechts · springen gaat vanzelf · P = pauze</span>
+    <span class="aanraak">Sleep met je vinger naar links en rechts · springen gaat vanzelf</span>
+  </div>
+
+  <script>
+  "use strict";
+  const { tekenSprite: spr, tekst: tk, gloeiTekst, getal, willekeurig } = Arcade;
+
+  /* ════════════════════════════════════════════════════════════
+     Wereld: x van 0 tot 420, y wordt negatief naarmate je stijgt.
+     10 pixels = 1 meter.
+  ════════════════════════════════════════════════════════════ */
+  const W = 420, H = 720;
+  const ZWAARTE = 0.42, SPRONG = -13, VEER = -21, RAKET = -16;
+  const R = 16;                       // straal van het sterretje
+  const cv = document.getElementById('cv');
+  const ctx = Arcade.maakCanvas(cv, W, H);
+  const geluid = Arcade.maakGeluid('ss-geluid', document.getElementById('geluidKnop'));
+  const recordOpslag = Arcade.record('ss-record');
+
+  function sfx(soort) {
+    const g = geluid;
+    switch (soort) {
+      case 'sprong': g.toon(320, 0.12, 'sine', 0.12, 640); break;
+      case 'veer':   g.toon(220, 0.35, 'sine', 0.16, 1100); g.toon(440, 0.3, 'triangle', 0.06, 1760); break;
+      case 'brokkel': g.knal(0.3, 0.3, 1500); break;
+      case 'ster':   if (g.mag(soort, 40)) g.toon(1320, 0.1, 'triangle', 0.09, 1760); break;
+      case 'raket':  g.knal(1.6, 0.35, 3000, 400); g.toon(120, 1.5, 'sawtooth', 0.08, 500); break;
+      case 'schild': g.toon(880, 0.25, 'sine', 0.12, 1320); break;
+      case 'pop':    g.toon(1400, 0.3, 'sine', 0.15, 200); break;
+      case 'stamp':  g.toon(500, 0.15, 'square', 0.1, 120); g.knal(0.2, 0.2, 2000); break;
+      case 'geraakt': g.knal(0.6, 0.5, 1500); g.toon(600, 0.9, 'sawtooth', 0.15, 60); break;
+      case 'meteoor': if (g.mag(soort, 400)) g.toon(1600, 0.25, 'square', 0.04, 800); break;
+      case 'zone':   [523, 659, 784, 1047, 1319].forEach((f, i) => g.toon(f, 0.14, 'square', 0.08, null, i * 0.08)); break;
+      case 'gameover': [392, 311, 247, 196].forEach((f, i) => g.toon(f, 0.35, 'sawtooth', 0.12, null, i * 0.2)); break;
+    }
+  }
+
+  /* ── Zones: de lucht verandert terwijl je stijgt ── */
+  const ZONES = [
+    { vanaf: 0,    naam: 'DE WEIDE',     boven: [30, 64, 175],  onder: [56, 189, 248] },
+    { vanaf: 600,  naam: 'WOLKENRIJK',   boven: [76, 29, 149],  onder: [244, 114, 182] },
+    { vanaf: 1600, naam: 'STRATOSFEER',  boven: [30, 27, 75],   onder: [109, 40, 217] },
+    { vanaf: 3000, naam: 'DE RUIMTE IN!', boven: [2, 6, 23],    onder: [15, 23, 42] },
+  ];
+  function zoneVan(m) { let z = 0; for (let i = 0; i < ZONES.length; i++) if (m >= ZONES[i].vanaf) z = i; return z; }
+  function luchtKleur(m, welke) {
+    const i = zoneVan(m), a = ZONES[i], b = ZONES[Math.min(ZONES.length - 1, i + 1)];
+    const lengte = b.vanaf - a.vanaf || 1;
+    const t = i === ZONES.length - 1 ? 0 : Math.max(0, Math.min(1, (m - a.vanaf - lengte * 0.6) / (lengte * 0.4)));
+    const ka = a[welke], kb = b[welke];
+    return `rgb(${ka.map((v, j) => Math.round(v + (kb[j] - v) * t)).join(',')})`;
+  }
+
+  // vaste "willekeur" per index: de decoraties staan elke keer op dezelfde plek
+  function hash(n) { let x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
+
+  /* ── Sprites ── */
+  function sterPad(g, r, binnen = 0.48) {
+    g.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * binnen : r;
+      i ? g.lineTo(Math.cos(a) * rr, Math.sin(a) * rr) : g.moveTo(Math.cos(a) * rr, Math.sin(a) * rr);
+    }
+    g.closePath();
+  }
+  const HELD = Arcade.sprite(64, 64, g => {
+    g.shadowColor = '#fde047'; g.shadowBlur = 16;
+    const gr = g.createRadialGradient(-4, -6, 2, 0, 0, 22);
+    gr.addColorStop(0, '#fef9c3'); gr.addColorStop(0.5, '#fde047'); gr.addColorStop(1, '#f59e0b');
+    g.fillStyle = gr; sterPad(g, 21, 0.52); g.fill();
+    g.shadowBlur = 0; g.strokeStyle = '#fffbeb'; g.lineWidth = 1.5; sterPad(g, 21, 0.52); g.stroke();
+  });
+  const STER = Arcade.sprite(30, 30, g => {
+    g.shadowColor = '#fde047'; g.shadowBlur = 10; g.fillStyle = '#fde047'; sterPad(g, 8, 0.45); g.fill();
+    g.shadowBlur = 0; g.fillStyle = '#fff'; sterPad(g, 4, 0.45); g.fill();
+  });
+  const UFO = Arcade.sprite(70, 50, g => {
+    Arcade.neon(g, () => { g.beginPath(); g.ellipse(0, 4, 26, 9, 0, 0, Math.PI * 2); }, '#f472b6', 2.5, 12, 'rgba(40,10,40,0.9)');
+    Arcade.neon(g, () => { g.beginPath(); g.ellipse(0, -2, 11, 10, 0, Math.PI, 0); g.closePath(); }, '#a5f3fc', 2, 8, 'rgba(165,243,252,0.25)');
+    g.fillStyle = '#fde047'; for (const x of [-14, 0, 14]) { g.beginPath(); g.arc(x, 6, 2.2, 0, Math.PI * 2); g.fill(); }
+  });
+  const RAKET_SPR = Arcade.sprite(34, 44, g => {
+    Arcade.neon(g, () => Arcade.poly(g, [[0, -16], [7, -4], [7, 10], [0, 7], [-7, 10], [-7, -4]]), '#f87171', 2, 10, 'rgba(60,10,10,0.9)');
+    g.fillStyle = '#a5f3fc'; g.beginPath(); g.arc(0, -3, 3, 0, Math.PI * 2); g.fill();
+  });
+  const SCHILD_SPR = Arcade.sprite(36, 36, g => {
+    Arcade.neon(g, () => { g.beginPath(); g.arc(0, 0, 11, 0, Math.PI * 2); }, '#60a5fa', 2.5, 12, 'rgba(96,165,250,0.18)');
+    g.fillStyle = '#bfdbfe'; g.font = 'bold 12px "Segoe UI", system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('S', 0, 1);
+  });
+  const METEOOR = Arcade.sprite(40, 40, g => {
+    Arcade.neon(g, () => Arcade.poly(g, [[0, -12], [10, -6], [12, 5], [3, 12], [-9, 9], [-12, -3]]), '#fb923c', 2.5, 12, 'rgba(50,20,10,0.92)');
+  });
+
+  /* ════════════════════════════════════════════════════════════
+     Spelstaat
+  ════════════════════════════════════════════════════════════ */
+  let toestand = 'menu', tijd = 0;
+  let held, camY, platforms, sterren, items, ufos, meteoren, deeltjes, teksten, hoogsteRij, maxHoogte, bonus, zone, banner, stats;
+  let eindTimer = 0, kanHerstart = false, nieuwRecord = false, schok = 0, flits = 0, flitsKleur = '#fff';
+  let record = recordOpslag.lees();
+
+  function zetToestand(t) { toestand = t; document.body.dataset.toestand = t; }
+  const hoogte = () => Math.max(0, Math.floor(-held.y / 10));
+  const score = () => maxHoogte + bonus;
+
+  function leegSpel() {
+    held = { x: W / 2, y: -40, vx: 0, vy: 0, raket: 0, schild: false, dood: false, draai: 0, kijk: 1, rek: 0 };
+    camY = -H + 120;
+    platforms = []; sterren = []; items = []; ufos = []; meteoren = []; deeltjes = []; teksten = [];
+    maxHoogte = 0; bonus = 0; zone = 0; banner = null; eindTimer = 0;
+    stats = { sterren: 0, ufos: 0 };
+    // de grond: een breed platform om op te beginnen
+    platforms.push({ x: 0, y: 0, w: W, soort: 'grond', vx: 0 });
+    hoogsteRij = 0;
+    vulPlatforms();
+  }
+  function nieuwSpel() {
+    geluid.start();
+    leegSpel();
+    held.vy = SPRONG;
+    schok = 0; flits = 0; kanHerstart = false; nieuwRecord = false;
+    zetToestand('spelen');
+    zetBanner(ZONES[0].naam, 'Spring zo hoog als je kunt!', '#fde047', 120);
+  }
+
+  /* ── Platforms maken ─────────────────────── */
+  function vulPlatforms() {
+    while (hoogsteRij > camY - 300) {
+      const m = -hoogsteRij / 10;
+      const gat = Math.min(165, 68 + m * 0.03) * willekeurig(0.75, 1.05);
+      const y = hoogsteRij - gat;
+      const w = Math.max(54, 74 - m * 0.005);
+      const x = willekeurig(8, W - w - 8);
+      const kans = Math.random();
+      let soort = 'normaal';
+      if (m > 150 && kans < Math.min(0.32, 0.1 + m / 8000)) soort = 'beweeg';
+      else if (m > 300 && kans < Math.min(0.48, 0.38 + m / 20000)) soort = 'brokkel';
+      else if (m > 1800 && kans < 0.6) soort = 'flikker';
+      const p = { x, y, w, soort, vx: soort === 'beweeg' ? (Math.random() < 0.5 ? -1 : 1) * Math.min(3.2, 1 + m / 1500) : 0, fase: Math.random() * 200 };
+      if (soort === 'normaal' && Math.random() < 0.07) p.veer = true;
+      platforms.push(p);
+      // een flikkerplatform krijgt altijd een betrouwbare buur op dezelfde hoogte
+      if (soort === 'flikker') platforms.push({ x: mod(x + W / 2, W - w - 16) + 8, y, w, soort: 'normaal', vx: 0 });
+
+      if (Math.random() < 0.22) for (let i = 0; i < 4; i++) sterren.push({ x: x + w / 2 + (i - 1.5) * 22, y: y - 40 - Math.sin(i / 3 * Math.PI) * 20 });
+      if (m > 250 && Math.random() < 0.025) items.push({ soort: 'raket', p, dx: w / 2 });
+      else if (m > 150 && Math.random() < 0.025) items.push({ soort: 'schild', p, dx: w / 2 });
+      if (m > 700 && Math.random() < Math.min(0.14, (m - 700) / 12000)) ufos.push({ x: willekeurig(40, W - 40), y: y - gat / 2, vx: willekeurig(0.6, 1.6) * (Math.random() < 0.5 ? -1 : 1), t: Math.random() * 100 });
+      hoogsteRij = y;
+    }
+  }
+  const mod = (a, n) => ((a % n) + n) % n;
+
+  function flikkerZichtbaar(p) { return p.soort !== 'flikker' || mod(tijd + p.fase, 200) < 135; }
+
+  /* ── Effecten ─────────────────────────────── */
+  function stof(x, y, kleur, n = 8, kracht = 2.5) {
+    for (let i = 0; i < n && deeltjes.length < 600; i++) {
+      const a = Math.random() * Math.PI * 2, s = Math.random() * kracht + 0.4;
+      deeltjes.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 0.5, leven: 20 + Math.random() * 20, max: 40, kleur, maat: 2 + Math.random() * 2 });
+    }
+  }
+  function zweefTekst(x, y, t, kleur = '#fff', maat = 14, leven = 50) {
+    if (teksten.length > 30) teksten.shift();
+    teksten.push({ x, y, t, kleur, maat, leven, max: leven });
+  }
+  function zetBanner(t, sub, kleur, duur) { banner = { t, sub, kleur, tijd: 0, duur }; }
+
+  function geraakt(bron) {
+    if (held.dood) return;
+    if (held.raket > 0) { bron.dood = true; stof(bron.x, bron.y, '#fb923c', 20, 4); sfx('stamp'); return; }
+    if (held.schild) {
+      held.schild = false; bron.dood = true;
+      stof(held.x, held.y, '#60a5fa', 24, 4);
+      sfx('pop'); schok = 6;
+      held.vy = Math.min(held.vy, -8);
+      return;
+    }
+    held.dood = true;
+    held.vy = -6;
+    held.vx = 0;
+    sfx('geraakt');
+    schok = 12; flits = 0.5; flitsKleur = '#f87171';
+  }
+
+  /* ════════════════════════════════════════════════════════════
+     Update
+  ════════════════════════════════════════════════════════════ */
+  const toetsen = {};
+  let doelX = null;
+
+  function updateHeld() {
+    const h = held;
+    const k = (toetsen.arrowright || toetsen.d ? 1 : 0) - (toetsen.arrowleft || toetsen.a ? 1 : 0);
+    if (!h.dood) {
+      if (k) { doelX = null; h.vx += k * 0.95; h.vx *= 0.88; }
+      else if (doelX !== null) h.vx = Math.max(-10, Math.min(10, (doelX - h.x) * 0.2));
+      else h.vx *= 0.85;
+      h.vx = Math.max(-9, Math.min(9, h.vx));
+      if (Math.abs(h.vx) > 0.4) h.kijk = Math.sign(h.vx);
+    }
+    h.x += h.vx;
+    if (h.x < -R) h.x += W + 2 * R;      // links eruit = rechts erin
+    if (h.x > W + R) h.x -= W + 2 * R;
+
+    if (h.raket > 0) {
+      h.raket--;
+      h.vy = RAKET;
+      for (let i = 0; i < 3; i++) deeltjes.push({ x: h.x + willekeurig(-5, 5), y: h.y + 22, vx: willekeurig(-1, 1), vy: willekeurig(3, 6), leven: 22, max: 22, kleur: Math.random() < 0.5 ? '#fb923c' : '#fde047', maat: 3 });
+      if (h.raket === 0) h.vy = -6;
+    } else h.vy += ZWAARTE;
+
+    const oudOnder = h.y + R;
+    h.y += h.vy;
+    h.draai = h.dood ? h.draai + 0.25 : h.draai * 0.85 + h.vx * 0.012;
+    h.rek += ((h.vy < 0 ? Math.min(0.25, -h.vy * 0.018) : 0) - h.rek) * 0.3;
+
+    // landen op een platform (alleen van boven, tijdens het vallen)
+    if (!h.dood && h.vy > 0 && h.raket === 0) {
+      for (const p of platforms) {
+        if (p.kapot || !flikkerZichtbaar(p)) continue;
+        const onder = h.y + R;
+        if (oudOnder <= p.y + 2 && onder >= p.y && h.x > p.x - 8 && h.x < p.x + p.w + 8) {
+          h.y = p.y - R;
+          if (p.veer && Math.abs(h.x - (p.x + p.w / 2)) < 18) { h.vy = VEER; p.veerTijd = 12; sfx('veer'); stof(h.x, p.y, '#a5f3fc', 12); }
+          else { h.vy = SPRONG; sfx('sprong'); stof(h.x, p.y, 'rgba(255,255,255,0.8)', 5, 1.5); }
+          h.rek = -0.3;   // even platgedrukt
+          if (p.soort === 'brokkel') { p.kapot = true; p.vy = 0; sfx('brokkel'); stof(p.x + p.w / 2, p.y, '#d6a36a', 16, 2.5); }
+          break;
+        }
+      }
+    }
+  }
+
+  function updateSpel() {
+    updateHeld();
+    const h = held;
+
+    // camera gaat alleen omhoog
+    const doelCam = h.y - H * 0.42;
+    if (doelCam < camY) camY += (doelCam - camY) * 0.2;
+    vulPlatforms();
+
+    for (const p of platforms) {
+      if (p.vx) { p.x += p.vx; if (p.x < 4 || p.x + p.w > W - 4) p.vx *= -1; }
+      if (p.kapot) { p.vy = (p.vy || 0) + 0.5; p.y += p.vy; }
+      if (p.veerTijd > 0) p.veerTijd--;
+    }
+    platforms = platforms.filter(p => p.y < camY + H + 80);
+    items = items.filter(i => platforms.includes(i.p) && !i.p.kapot && !i.weg);
+
+    if (!h.dood) {
+      for (const s of sterren) {
+        if (!s.weg && Math.hypot(s.x - h.x, s.y - h.y) < R + 10) { s.weg = true; bonus += 25; stats.sterren++; stof(s.x, s.y, '#fde047', 8); sfx('ster'); }
+      }
+      for (const it of items) {
+        const ix = it.p.x + it.dx, iy = it.p.y - 18;
+        if (Math.hypot(ix - h.x, iy - h.y) < R + 14) {
+          it.weg = true;
+          if (it.soort === 'raket') { h.raket = 150; sfx('raket'); zweefTekst(h.x, h.y - 40, 'RAKET!', '#f87171', 18, 60); schok = 4; }
+          else { h.schild = true; sfx('schild'); zweefTekst(h.x, h.y - 40, 'SCHILD', '#60a5fa', 16, 50); }
+        }
+      }
+    }
+    sterren = sterren.filter(s => !s.weg && s.y < camY + H + 40);
+
+    for (const u of ufos) {
+      u.t++;
+      u.x += u.vx;
+      if (u.x < 30 || u.x > W - 30) u.vx *= -1;
+      u.yy = u.y + Math.sin(u.t * 0.05) * 10;
+      if (h.dood || u.dood) continue;
+      if (Math.abs(u.x - h.x) < 30 && Math.abs(u.yy - h.y) < 22) {
+        if (h.vy > 0 && h.y < u.yy - 6) {                // erop springen
+          u.dood = true; h.vy = -14; bonus += 250; stats.ufos++;
+          zweefTekst(u.x, u.yy - 20, '+250', '#f472b6', 16, 45);
+          stof(u.x, u.yy, '#f472b6', 22, 4); sfx('stamp'); schok = 5;
+        } else geraakt(u);
+      }
+    }
+    ufos = ufos.filter(u => !u.dood && u.y < camY + H + 60);
+
+    // meteoren in de ruimte: eerst een waarschuwing bovenin, dan vallen ze
+    const m = hoogte();
+    if (!h.dood && m > 2400 && Math.random() < Math.min(0.012, (m - 2400) / 120000)) {
+      meteoren.push({ x: willekeurig(30, W - 30), y: camY - 40, vx: willekeurig(-1.2, 1.2), vy: 0, wacht: 60 });
+      sfx('meteoor');
+    }
+    for (const mt of meteoren) {
+      if (mt.wacht > 0) { mt.wacht--; mt.y = camY - 40; if (mt.wacht === 0) mt.vy = 7.5; continue; }
+      mt.x += mt.vx; mt.y += mt.vy;
+      if (Math.random() < 0.6) deeltjes.push({ x: mt.x, y: mt.y - 8, vx: willekeurig(-0.4, 0.4), vy: -1, leven: 18, max: 18, kleur: '#fb923c', maat: 3 });
+      if (!h.dood && !mt.dood && Math.hypot(mt.x - h.x, mt.y - h.y) < R + 11) geraakt(mt);
+    }
+    meteoren = meteoren.filter(mt => !mt.dood && mt.y < camY + H + 60);
+
+    // hoogte, zones en mijlpalen
+    if (!h.dood) {
+      if (m > maxHoogte) {
+        if (Math.floor(m / 1000) > Math.floor(maxHoogte / 1000)) zweefTekst(W / 2, h.y - 70, getal(Math.floor(m / 1000) * 1000) + ' m!', '#fde047', 22, 70);
+        maxHoogte = m;
+      }
+      const z = zoneVan(m);
+      if (z > zone) { zone = z; zetBanner(ZONES[z].naam, getal(ZONES[z].vanaf) + ' meter hoog', '#fde047', 150); sfx('zone'); }
+    }
+
+    // naar beneden gevallen = game over
+    if (h.y - R > camY + H + 20) {
+      if (!h.dood) { h.dood = true; sfx('geraakt'); }
+      if (eindTimer === 0) eindTimer = 30;
+    }
+    if (eindTimer > 0 && --eindTimer === 0) gameOver();
+  }
+
+  function gameOver() {
+    zetToestand('over');
+    sfx('gameover');
+    if (score() > record) { record = score(); nieuwRecord = true; recordOpslag.bewaar(record); }
+    setTimeout(() => { kanHerstart = true; }, 900);
+  }
+
+  function update() {
+    tijd++;
+    if (toestand === 'pauze') return;
+    if (toestand === 'spelen') updateSpel();
+    else if (toestand === 'menu') {
+      // demonstratie: het sterretje stuitert op de grond
+      held.vy += ZWAARTE; held.y += held.vy;
+      if (held.y + R >= 0) { held.y = -R; held.vy = SPRONG; held.rek = -0.3; }
+      held.rek += ((held.vy < 0 ? Math.min(0.25, -held.vy * 0.018) : 0) - held.rek) * 0.3;
+    }
+    for (const d of deeltjes) { d.x += d.vx; d.y += d.vy; d.vy += 0.08; d.vx *= 0.97; d.leven--; }
+    deeltjes = deeltjes.filter(d => d.leven > 0);
+    for (const t of teksten) { t.y -= 0.7; t.leven--; }
+    teksten = teksten.filter(t => t.leven > 0);
+    if (banner && ++banner.tijd > banner.duur) banner = null;
+    schok = schok > 0.1 ? schok * 0.88 : 0;
+    flits = flits > 0.01 ? flits * 0.9 : 0;
+  }
+
+  /* ════════════════════════════════════════════════════════════
+     Tekenen
+  ════════════════════════════════════════════════════════════ */
+  const sy = y => y - camY;     // wereld-y → scherm-y
+
+  function tekenLucht() {
+    const m = Math.max(0, -camY / 10 - 30);
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, luchtKleur(m + 60, 'boven'));
+    g.addColorStop(1, luchtKleur(m, 'onder'));
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+
+    // sterren worden zichtbaar vanaf de stratosfeer
+    const sterAlfa = Math.max(0, Math.min(1, (m - 1000) / 1500));
+    if (sterAlfa > 0) {
+      const off = -camY * 0.08;
+      for (let i = 0; i < 90; i++) {
+        const x = hash(i) * W, y = mod(hash(i + 500) * H * 2 + off, H);
+        ctx.fillStyle = `rgba(255,255,255,${sterAlfa * (0.3 + hash(i + 900) * 0.7)})`;
+        ctx.fillRect(x, y, hash(i) < 0.15 ? 2 : 1.2, hash(i) < 0.15 ? 2 : 1.2);
+      }
+    }
+    // decoraties met diepte (bewegen langzamer dan de wereld): wolken, later planeten
+    const P = 0.35, RIJ = 150;
+    const top = camY * P, eerste = Math.floor(top / RIJ) - 1;
+    for (let i = eerste; i < eerste + Math.ceil(H / RIJ) + 2; i++) {
+      const wy = i * RIJ, schermY = wy - top;
+      const mRij = -wy / P / 10;                       // ongeveer de hoogte waar deze rij hoort
+      const x = hash(i * 3.1) * (W + 160) - 80;
+      if (mRij < 2600 && hash(i * 7.7) < 0.75) {
+        const a = Math.max(0, Math.min(0.55, (2600 - mRij) / 2000));
+        ctx.fillStyle = `rgba(255,255,255,${a})`;
+        const s = 0.7 + hash(i * 1.3) * 0.8;
+        for (const [dx, dy, r] of [[0, 0, 26], [24, -8, 20], [46, 2, 22], [-22, 4, 18]]) { ctx.beginPath(); ctx.arc(x + dx * s, schermY + dy * s, r * s, 0, Math.PI * 2); ctx.fill(); }
+      } else if (mRij > 2800 && hash(i * 5.3) < 0.28) {
+        const r = 14 + hash(i * 2.2) * 30, tint = Math.floor(hash(i * 9.1) * 360);
+        const pg = ctx.createRadialGradient(x - r * 0.3, schermY - r * 0.3, r * 0.1, x, schermY, r);
+        pg.addColorStop(0, `hsl(${tint},70%,70%)`); pg.addColorStop(1, `hsl(${tint},60%,25%)`);
+        ctx.fillStyle = pg; ctx.beginPath(); ctx.arc(x, schermY, r, 0, Math.PI * 2); ctx.fill();
+        if (hash(i * 4.4) < 0.4) {
+          ctx.strokeStyle = `hsla(${tint},60%,80%,0.6)`; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.ellipse(x, schermY, r * 1.7, r * 0.45, -0.3, 0, Math.PI * 2); ctx.stroke();
+        }
+      }
+    }
+    // heuvels bij de start
+    const grondY = sy(0);
+    if (grondY < H + 200) {
+      ctx.fillStyle = '#166534';
+      ctx.beginPath(); ctx.moveTo(0, grondY + 30);
+      for (let x = 0; x <= W; x += 20) ctx.lineTo(x, grondY + 18 - Math.sin(x * 0.02) * 22 - Math.sin(x * 0.051) * 10);
+      ctx.lineTo(W, H + 200); ctx.lineTo(0, H + 200); ctx.closePath(); ctx.fill();
+    }
+  }
+
+  const PLATFORM_KLEUR = { grond: '#4ade80', normaal: '#22d3ee', beweeg: '#a78bfa', brokkel: '#d6a36a', flikker: '#f472b6' };
+  function tekenPlatform(p) {
+    const y = sy(p.y);
+    if (y < -20 || y > H + 20) return;
+    if (p.soort === 'grond') {
+      ctx.fillStyle = '#15803d'; ctx.fillRect(0, y, W, 400);
+      ctx.fillStyle = '#4ade80'; ctx.fillRect(0, y, W, 4);
+      return;
+    }
+    const kleur = PLATFORM_KLEUR[p.soort];
+    const zicht = flikkerZichtbaar(p);
+    ctx.save();
+    if (p.kapot) ctx.globalAlpha = Math.max(0, 1 - (p.vy || 0) / 10);
+    if (!zicht) ctx.globalAlpha = 0.18;
+    else if (p.soort === 'flikker' && mod(tijd + p.fase, 200) > 110) ctx.globalAlpha = Math.floor(tijd / 4) % 2 ? 1 : 0.4;   // gaat zo verdwijnen
+    ctx.shadowColor = kleur; ctx.shadowBlur = 10;
+    ctx.fillStyle = 'rgba(10,12,30,0.85)';
+    ctx.strokeStyle = kleur; ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.roundRect ? ctx.roundRect(p.x, y, p.w, 12, 6) : ctx.rect(p.x, y, p.w, 12);
+    ctx.fill(); ctx.stroke();
+    ctx.shadowBlur = 0;
+    if (p.soort === 'brokkel') {
+      ctx.strokeStyle = 'rgba(214,163,106,0.8)'; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(p.x + p.w * 0.3, y + 1); ctx.lineTo(p.x + p.w * 0.38, y + 7); ctx.lineTo(p.x + p.w * 0.33, y + 11);
+      ctx.moveTo(p.x + p.w * 0.7, y + 1); ctx.lineTo(p.x + p.w * 0.62, y + 6); ctx.stroke();
+    }
+    if (p.veer) {
+      const cx = p.x + p.w / 2, ingedrukt = p.veerTijd > 0 ? 4 : 0;
+      ctx.strokeStyle = '#a5f3fc'; ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i <= 4; i++) ctx.lineTo(cx + (i % 2 ? 6 : -6), y - i * (3 - ingedrukt / 4));
+      ctx.stroke();
+      ctx.fillStyle = '#a5f3fc'; ctx.fillRect(cx - 9, y - 14 + ingedrukt, 18, 3);
+    }
+    ctx.restore();
+  }
+
+  function tekenHeld() {
+    const h = held;
+    const x = h.x, y = sy(h.y);
+    if (h.raket > 0) spr(ctx, RAKET_SPR, x, y + 12, 0, 1.2);
+    // uitrekken bij stijgen, platdrukken bij landen
+    const sx = 1 - h.rek * 0.6, syy = 1 + h.rek;
+    spr(ctx, HELD, x, y, h.draai, sx, syy);
+    // gezichtje
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(h.draai);
+    ctx.scale(sx, syy);
+    const kijk = h.kijk * 2;
+    ctx.fillStyle = '#1e1b4b';
+    if (h.dood) {
+      ctx.strokeStyle = '#1e1b4b'; ctx.lineWidth = 1.8;
+      for (const ox of [-5, 5]) { ctx.beginPath(); ctx.moveTo(ox - 2.5, -3.5); ctx.lineTo(ox + 2.5, 1.5); ctx.moveTo(ox + 2.5, -3.5); ctx.lineTo(ox - 2.5, 1.5); ctx.stroke(); }
+    } else {
+      for (const ox of [-5, 5]) { ctx.beginPath(); ctx.ellipse(ox + kijk, -1, 2.2, 3, 0, 0, Math.PI * 2); ctx.fill(); }
+      ctx.fillStyle = '#fff';
+      for (const ox of [-5, 5]) { ctx.beginPath(); ctx.arc(ox + kijk + 0.8, -2.2, 0.9, 0, Math.PI * 2); ctx.fill(); }
+      ctx.strokeStyle = '#1e1b4b'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(kijk, 3, 3.5, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+      ctx.fillStyle = 'rgba(244,114,182,0.6)';
+      for (const ox of [-9, 9]) { ctx.beginPath(); ctx.arc(ox + kijk * 0.5, 3.5, 2, 0, Math.PI * 2); ctx.fill(); }
+    }
+    ctx.restore();
+    if (h.schild) {
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = `rgba(96,165,250,${0.55 + Math.sin(tijd * 0.15) * 0.25})`; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(x, y, R + 9, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = 'rgba(96,165,250,0.08)'; ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  function tekenHud() {
+    tk(ctx, 'HOOGTE', 14, 18, 10, 'rgba(255,255,255,0.75)', 'left', 700);
+    tk(ctx, getal(hoogte()) + ' m', 14, 38, 22, '#fff', 'left', 900);
+    tk(ctx, 'SCORE ' + getal(score()), 14, 60, 11, '#fde047', 'left', 800);
+    const ry = Arcade.aanraak() ? 64 : 0;   // op aanraakschermen staat rechtsboven de pauzeknop
+    tk(ctx, 'RECORD', W - 14, 18 + ry, 10, 'rgba(255,255,255,0.75)', 'right', 700);
+    tk(ctx, getal(Math.max(record, score())), W - 14, 36 + ry, 15, '#fde047', 'right', 800);
+    if (held.raket > 0) {
+      ctx.fillStyle = 'rgba(248,113,113,0.25)'; ctx.fillRect(14, 72, 80, 4);
+      ctx.fillStyle = '#f87171'; ctx.fillRect(14, 72, 80 * held.raket / 150, 4);
+    }
+  }
+
+  function tekenBanner() {
+    if (!banner) return;
+    const p = banner.tijd / banner.duur;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, p < 0.15 ? p / 0.15 : p > 0.8 ? (1 - p) / 0.2 : 1);
+    gloeiTekst(ctx, banner.t, W / 2, H * 0.22, 34, banner.kleur, 20);
+    tk(ctx, banner.sub, W / 2, H * 0.22 + 34, 14, 'rgba(255,255,255,0.92)', 'center', 600);
+    ctx.restore();
+  }
+
+  function knipper(t, y) {
+    ctx.save(); ctx.globalAlpha = 0.55 + Math.sin(tijd * 0.08) * 0.45;
+    tk(ctx, t, W / 2, y, 16, '#fff', 'center', 800);
+    ctx.restore();
+  }
+
+  function tekenMenu() {
+    gloeiTekst(ctx, 'STERREN', W / 2, 140, 54, '#fde047', 24);
+    gloeiTekst(ctx, 'SPRONG', W / 2, 196, 46, '#f472b6', 22);
+    knipper(Arcade.aanraak() ? 'Tik om te starten' : 'Klik of druk op spatie om te starten', 300);
+    const regels = [Arcade.aanraak() ? 'Sleep met je vinger naar links en rechts' : 'Muis of pijltjes om te sturen', 'Je springt vanzelf op elk platform', 'Spring óp ufo\'s, ontwijk meteoren', 'Rand uit = andere kant weer in'];
+    regels.forEach((r, i) => tk(ctx, r, W / 2, 344 + i * 22, 13, 'rgba(255,255,255,0.9)', 'center', 600));
+    const legenda = [['normaal', 'Gewoon'], ['beweeg', 'Beweegt'], ['brokkel', 'Brokkelt'], ['flikker', 'Flikkert']];
+    legenda.forEach(([s, naam], i) => {
+      const x = 52 + i * 92;
+      ctx.save(); ctx.shadowColor = PLATFORM_KLEUR[s]; ctx.shadowBlur = 8;
+      ctx.strokeStyle = PLATFORM_KLEUR[s]; ctx.lineWidth = 2.5; ctx.fillStyle = 'rgba(10,12,30,0.85)';
+      ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x - 26, 448, 52, 10, 5) : ctx.rect(x - 26, 448, 52, 10); ctx.fill(); ctx.stroke(); ctx.restore();
+      tk(ctx, naam, x, 472, 10, 'rgba(255,255,255,0.85)', 'center', 700);
+    });
+    if (record) tk(ctx, 'RECORD  ' + getal(record), W / 2, 510, 13, '#fde047', 'center', 800);
+  }
+
+  function tekenGameOver() {
+    ctx.fillStyle = 'rgba(5,6,25,0.7)'; ctx.fillRect(0, 0, W, H);
+    gloeiTekst(ctx, 'OEPS!', W / 2, 150, 54, '#f472b6', 24);
+    tk(ctx, getal(maxHoogte) + ' m', W / 2, 225, 40, '#fff', 'center', 900);
+    tk(ctx, 'HOOGTE BEREIKT', W / 2, 255, 11, 'rgba(203,213,225,0.85)', 'center', 700);
+    if (nieuwRecord && score() > 0 && Math.floor(tijd / 20) % 2 === 0) gloeiTekst(ctx, 'NIEUW RECORD!', W / 2, 292, 22, '#fde047', 16);
+    [['Score', getal(score())], ['Sterren verzameld', String(stats.sterren)], ["Ufo's geplet", String(stats.ufos)], ['Record', getal(record)]]
+      .forEach(([k, v], i) => { tk(ctx, k, W / 2 - 130, 340 + i * 28, 14, 'rgba(203,213,225,0.9)', 'left', 500); tk(ctx, v, W / 2 + 130, 340 + i * 28, 14, '#fff', 'right', 800); });
+    if (kanHerstart) knipper(Arcade.aanraak() ? 'Tik om opnieuw te spelen' : 'Klik of druk op spatie om opnieuw te spelen', 490);
+  }
+
+  function teken() {
+    ctx.save();
+    if (schok) ctx.translate((Math.random() * 2 - 1) * schok, (Math.random() * 2 - 1) * schok);
+    tekenLucht();
+    for (const p of platforms) tekenPlatform(p);
+    for (const it of items) spr(ctx, it.soort === 'raket' ? RAKET_SPR : SCHILD_SPR, it.p.x + it.dx, sy(it.p.y) - 18 + Math.sin(tijd * 0.08) * 3);
+    for (const s of sterren) spr(ctx, STER, s.x, sy(s.y), Math.sin(tijd * 0.05 + s.x) * 0.3);
+    for (const u of ufos) spr(ctx, UFO, u.x, sy(u.yy ?? u.y));
+    for (const mt of meteoren) {
+      if (mt.wacht > 0) {
+        if (Math.floor(mt.wacht / 6) % 2) { ctx.fillStyle = '#f87171'; ctx.beginPath(); ctx.moveTo(mt.x, 8); ctx.lineTo(mt.x + 10, 26); ctx.lineTo(mt.x - 10, 26); ctx.closePath(); ctx.fill(); tk(ctx, '!', mt.x, 19, 12, '#1a1a2e', 'center', 900); }
+      } else spr(ctx, METEOOR, mt.x, sy(mt.y), tijd * 0.1);
+    }
+    if (toestand !== 'over') tekenHeld();
+
+    ctx.globalCompositeOperation = 'lighter';
+    for (const d of deeltjes) { ctx.globalAlpha = Math.min(1, d.leven / d.max * 1.5); ctx.fillStyle = d.kleur; ctx.fillRect(d.x - d.maat / 2, sy(d.y) - d.maat / 2, d.maat, d.maat); }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+    for (const t of teksten) { ctx.globalAlpha = Math.min(1, t.leven / t.max * 2); tk(ctx, t.t, t.x, sy(t.y), t.maat, t.kleur, 'center', 900); }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+
+    if (toestand === 'menu') tekenMenu();
+    else {
+      tekenHud();
+      tekenBanner();
+      if (toestand === 'pauze') {
+        ctx.fillStyle = 'rgba(5,6,25,0.6)'; ctx.fillRect(0, 0, W, H);
+        gloeiTekst(ctx, 'PAUZE', W / 2, H / 2 - 20, 46, '#fde047', 20);
+        tk(ctx, Arcade.aanraak() ? 'Tik om verder te gaan' : 'P, klik of spatie om verder te gaan', W / 2, H / 2 + 30, 15, 'rgba(255,255,255,0.9)', 'center', 600);
+      }
+      if (toestand === 'over') tekenGameOver();
+    }
+    if (flits) { ctx.globalAlpha = Math.min(0.8, flits); ctx.fillStyle = flitsKleur; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
+  }
+
+  /* ════════════════════════════════════════════════════════════
+     Invoer
+  ════════════════════════════════════════════════════════════ */
+  function pauze(aan) {
+    if (toestand === 'spelen' && aan !== false) { zetToestand('pauze'); doelX = null; }
+    else if (toestand === 'pauze' && aan !== true) zetToestand('spelen');
+  }
+  function primair() {
+    if (toestand === 'menu' || (toestand === 'over' && kanHerstart)) nieuwSpel();
+    else if (toestand === 'pauze') pauze(false);
+  }
+
+  window.addEventListener('keydown', e => {
+    const k = e.key.toLowerCase();
+    if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
+    toetsen[k] = true;
+    if (e.repeat) return;
+    geluid.start();
+    if (k === ' ' || k === 'enter') primair();
+    else if (k === 'p' || k === 'escape') pauze();
+    else if (k === 'm') geluid.wissel();
+  });
+  window.addEventListener('keyup', e => { toetsen[e.key.toLowerCase()] = false; });
+  Arcade.pauzeBijWissel(() => { for (const k in toetsen) toetsen[k] = false; pauze(true); });
+
+  let vinger = null;
+  cv.addEventListener('pointerdown', e => {
+    geluid.start();
+    e.preventDefault();
+    if (toestand !== 'spelen') { primair(); return; }
+    if (e.pointerType !== 'mouse') vinger = e.pointerId;
+    doelX = Arcade.punt(cv, e, W, H).x;
+    try { cv.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+  cv.addEventListener('pointermove', e => {
+    if (toestand !== 'spelen') return;
+    if (e.pointerType === 'mouse' || e.pointerId === vinger) doelX = Arcade.punt(cv, e, W, H).x;
+  });
+  const los = e => { if (e.pointerId === vinger) { vinger = null; doelX = null; } };
+  cv.addEventListener('pointerup', los);
+  cv.addEventListener('pointercancel', los);
+  cv.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') doelX = null; });
+  document.getElementById('pauzeKnop').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); pauze(); });
+
+  leegSpel();
+  camY = -H + 120;
+  Arcade.lus(update, teken);
+  </script>
+</body>
+</html>

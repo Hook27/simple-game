@@ -25,7 +25,7 @@ body {
 }
 
 .nav-inner {
-  max-width: 1240px;   /* breder dan de pagina: er staan 8 spellen in */
+  max-width: 1240px;   /* breder dan de pagina: er staan 12 spellen in */
   margin: 0 auto;
   display: flex;
   align-items: stretch;
@@ -51,6 +51,12 @@ body {
 }
 
 .nav-logo span { color: #63b3ed; }
+
+/* Brede schermen: alle spellen in beeld, desnoods op twee regels in plaats van scrollen */
+@media (min-width: 1100px) {
+  .nav-inner { flex-wrap: wrap; overflow-x: visible; }
+  .nav-inner .nav-tab { height: 38px; }
+}
 
 .nav-tab {
   display: flex;
