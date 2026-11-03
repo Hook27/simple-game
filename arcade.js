@@ -108,6 +108,23 @@ const Arcade = (() => {
         s.connect(f); f.connect(gn); gn.connect(master);
         s.start(t); s.stop(t + duur);
       },
+      // huidige tijd van de audioklok (voor muziek die vooruit wordt ingepland)
+      get nu() { return ac ? ac.currentTime : 0; },
+      // een doorlopende toon (bijvoorbeeld een motor): toonhoogte en volume zijn steeds aan te passen
+      doorlopend(vorm = 'sawtooth', filterFreq = 900) {
+        if (!ac) return null;
+        const o = ac.createOscillator(), f = ac.createBiquadFilter(), gn = ac.createGain();
+        o.type = vorm; f.type = 'lowpass'; f.frequency.value = filterFreq; gn.gain.value = 0;
+        o.connect(f); f.connect(gn); gn.connect(master); o.start();
+        return {
+          zet(freq, vol) {
+            const t = ac.currentTime;
+            o.frequency.setTargetAtTime(freq, t, 0.05);
+            gn.gain.setTargetAtTime(aan ? vol : 0, t, 0.08);
+          },
+          stop() { try { gn.gain.setTargetAtTime(0, ac.currentTime, 0.05); o.stop(ac.currentTime + 0.3); } catch (e) {} },
+        };
+      },
       // hooguit één keer per `ms` milliseconden van dezelfde soort: geen ratelende brij
       mag(soort, ms) {
         const nu = performance.now();
