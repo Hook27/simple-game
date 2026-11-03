@@ -1,0 +1,1226 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Pixel Breakout</title>
+<link rel="stylesheet" href="stijl.css">
+<script src="nav.js" defer></script>
+<style>
+  :root{
+    --bg:#0b0b0d;
+    --panel:rgba(0,0,0,0.35);          /* doorschijnend, zodat de achtergrond van de site doorloopt */
+    --line:rgba(255,255,255,0.1);
+    --txt:#c8c8cf;
+    --dim:#6b6b76;
+    --accent:#ff6b35;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    display:flex; flex-direction:column; align-items:center;
+    overflow:hidden; user-select:none; -webkit-user-select:none;
+  }
+  /* menubalk van de site over de volle breedte, boven het spel */
+  .nav{ width:100%; flex:none; }
+  /* het spel zelf houdt zijn eigen monospace-letter */
+  header, #status, footer{
+    color:var(--txt);
+    font:13px/1.4 "Consolas","DejaVu Sans Mono",monospace;
+  }
+  footer .aanraak{ display:none; }
+  @media (pointer:coarse){            /* telefoon/tablet: aanraakuitleg i.p.v. toetsen */
+    footer .toetsen{ display:none; }
+    footer .aanraak{ display:inline; }
+  }
+  /* Vaste hoogte en niet afbreken: anders duwen de chips de balk naar twee regels,
+     krimpt #wrap en verspringt het speelveld. */
+  header{
+    width:100%; max-width:760px; height:34px; padding:0 10px;
+    display:flex; gap:14px; align-items:center; flex-wrap:nowrap; overflow:hidden;
+    border-bottom:1px solid var(--line); background:var(--panel);
+  }
+  header .stat{display:flex; gap:6px; align-items:baseline; flex:none}
+  /* stijl.css heeft ook een .stat (kaders bij de andere spellen): die hier uitschakelen */
+  header .stat{background:none; border:0; border-radius:0; padding:0; min-width:0;
+               backdrop-filter:none; -webkit-backdrop-filter:none; text-align:left}
+  header .k{color:var(--dim); font-size:11px; letter-spacing:.08em; text-transform:uppercase}
+  header .v{
+    color:#fff; font-variant-numeric:tabular-nums;
+    display:inline-block; text-align:right;   /* groeiende getallen verschuiven niets */
+  }
+  #hScore{min-width:6ch}
+  #hLevel,#hLives,#hBalls{min-width:2ch}
+  #hPaddle,#hClear{min-width:4ch}
+  /* status-chips (buffs, muis vast, demo) staan op het canvas, niet hier: de balk
+     kan daardoor nooit vollopen. De knoppen worden naar rechts geduwd. */
+  #soundBtn{margin-left:auto}
+  /* smal scherm: minder belangrijke tellers verbergen i.p.v. de balk laten groeien */
+  @media (max-width:680px){
+    header .stat.opt{display:none}   /* ballen, paddle en gesloopt: die laatste staat al als balk op het canvas */
+    header{gap:8px}
+  }
+  #demoBtn,#soundBtn{
+    flex:none;
+    font:inherit; font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--txt); background:#1c1c21; border:1px solid var(--line);
+    border-radius:2px; padding:2px 10px; cursor:pointer;
+  }
+  #soundBtn{padding:2px 8px; letter-spacing:0}
+  #demoBtn:hover,#soundBtn:hover{border-color:#3a3a42; color:#fff}
+  #demoBtn.aan{background:var(--accent); border-color:var(--accent); color:#0b0b0d; font-weight:bold}
+  #soundBtn.uit{color:#55555e; text-decoration:line-through}
+  /* eigen strook voor de status-chips, met gereserveerde hoogte zodat het
+     speelveld niet verspringt als er een buff bij komt of wegvalt */
+  #status{
+    width:100%; max-width:760px; height:24px; padding:0 10px;
+    display:flex; align-items:center; gap:6px; overflow:hidden;
+    font-size:11px;
+  }
+  #status .chip{
+    padding:2px 7px; border-radius:2px; font-weight:bold;
+    letter-spacing:.04em; white-space:nowrap; flex:none;
+  }
+  /* alleen een lichte verschuiving; opacity blijft 1, zodat de chip zichtbaar is
+     ook als de animatie niet draait (bv. tab niet in beeld) */
+  #status .chip.toast{ animation:toastIn .18s ease-out }
+  @keyframes toastIn{ from{ transform:translateY(-4px) } to{ transform:none } }
+  @media (prefers-reduced-motion:reduce){ #status .chip.toast{ animation:none } }
+  #wrap{
+    flex:1; min-height:0; width:100%;
+    display:flex; align-items:center; justify-content:center; padding:6px;
+  }
+  canvas{
+    display:block; flex:none; background:#111114;
+    border:1px solid var(--line);
+    touch-action:none; cursor:crosshair;
+  }
+  footer{
+    width:100%; max-width:760px; padding:4px 10px 6px;
+    color:var(--dim); font-size:11px; border-top:1px solid var(--line);
+    background:var(--panel); text-align:center;
+  }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo">🎮 <span>Spelletjes</span></a>
+    <a href="geheugen-spel.html" class="nav-tab">Geheugen spel</a>
+    <a href="vier-op-rij.html" class="nav-tab">Vier op een rij</a>
+    <a href="rots-papier-schaar.html" class="nav-tab">Rots-Papier-Schaar</a>
+    <a href="pixel-breakout.html" class="nav-tab actief">Pixel Breakout</a>
+  </div>
+</nav>
+
+<header>
+  <div class="stat"><span class="k">score</span><span class="v" id="hScore">0</span></div>
+  <div class="stat"><span class="k">level</span><span class="v" id="hLevel">1</span></div>
+  <div class="stat"><span class="k">levens</span><span class="v" id="hLives">3</span></div>
+  <div class="stat opt"><span class="k">ballen</span><span class="v" id="hBalls">1</span></div>
+  <div class="stat opt"><span class="k">paddle</span><span class="v" id="hPaddle">100%</span></div>
+  <div class="stat opt"><span class="k">gesloopt</span><span class="v" id="hClear">0%</span></div>
+  <button id="soundBtn" type="button" title="geluid aan/uit (M)">♪</button>
+  <button id="demoBtn" type="button">demo</button>
+</header>
+
+<div id="status"></div>
+
+<div id="wrap"><canvas id="cv"></canvas></div>
+
+<footer>
+  <span class="toetsen">muis / pijltjes = paddle &nbsp;·&nbsp; klik of spatie = lanceren &nbsp;·&nbsp; klik vangt de muis, Esc laat los
+  &nbsp;·&nbsp; P = pauze &nbsp;·&nbsp; R = herstart &nbsp;·&nbsp; D = demo (klik neemt over) &nbsp;·&nbsp; M = geluid<br></span>
+  <span class="aanraak">sleep met je vinger = paddle &nbsp;·&nbsp; tik = lanceren / verder<br></span>
+  het gele veld is afgesloten &mdash; de gang is de enige ingang: mik de bal de mond in, hij ketst naar het
+  uiteinde, hapt daar uit het terrein en komt weer terug
+</footer>
+
+<script>
+"use strict";
+
+/* ---------- afmetingen (logische pixels) ---------- */
+const W = 600, H = 990;          // speelveld: extra hoogte = meer speelruimte onder het terrein
+const CELL = 4;                  // grootte van één terrein-blokje
+const GW = W / CELL;             // 150 kolommen
+const TERRAIN_H = 640;           // terrein beslaat de bovenste 640px
+const GH = TERRAIN_H / CELL;     // 160 rijen
+
+const EMPTY = 0, SOFT = 1, HARD = 2;
+
+/* ---------- canvas + schaal ---------- */
+const cv = document.getElementById("cv");
+const ctx = cv.getContext("2d");
+const terrain = document.createElement("canvas");   // offscreen terreinlaag
+const tctx = terrain.getContext("2d");
+let scale = 1;
+
+let laatsteMaat = "";
+
+function resize(){
+  const wrap = document.getElementById("wrap");
+  const availW = wrap.clientWidth - 12;
+  const availH = wrap.clientHeight - 12;
+  const maat = availW + "x" + availH + "@" + (window.devicePixelRatio || 1);
+  if (maat === laatsteMaat) return;    // niets veranderd: niet opnieuw opbouwen
+  laatsteMaat = maat;
+  const cssScale = Math.max(0.25, Math.min(availW / W, availH / H));
+  cv.style.width  = (W * cssScale) + "px";
+  cv.style.height = (H * cssScale) + "px";
+
+  scale = cssScale * (window.devicePixelRatio || 1);
+  cv.width  = Math.round(W * scale);
+  cv.height = Math.round(H * scale);
+  terrain.width  = Math.round(W * scale);
+  terrain.height = Math.round(TERRAIN_H * scale);
+  ctx.setTransform(scale, 0, 0, scale, 0, 0);
+  tctx.setTransform(scale, 0, 0, scale, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  redrawTerrainAll();
+}
+window.addEventListener("resize", resize);
+// de container zelf in de gaten houden: betrouwbaarder dan het window-event, en
+// resize() slaat zichzelf over als de beschikbare ruimte niet echt veranderd is
+if (window.ResizeObserver) new ResizeObserver(() => resize()).observe(document.getElementById("wrap"));
+
+/* ---------- geluid ----------
+   Alles gesynthetiseerd met WebAudio, geen samples of libraries. De browser laat
+   audio pas toe na een klik of toets, dus de context wordt daar aangemaakt. */
+let ac = null, master = null, geluidAan = true;
+let stemEindes = [];          // eindtijden i.p.v. een teller: die kan niet blijven hangen
+const laatsteTik = {};
+
+try { geluidAan = localStorage.getItem("pb-geluid") !== "uit"; } catch (e) {}
+
+function audioAan(){
+  if (!geluidAan) return null;
+  if (!ac){
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    ac = new AC();
+    master = ac.createGain();
+    master.gain.value = 0.22;
+    master.connect(ac.destination);
+  }
+  if (ac.state === "suspended") ac.resume();
+  return ac;
+}
+
+function toon(freq, duur, vorm, vol, naar){
+  const c = audioAan();
+  if (!c) return;
+  const nu = c.currentTime;
+  stemEindes = stemEindes.filter(t => t > nu);
+  if (stemEindes.length > 8) return;          // stemmenplafond: geen modderige brij
+  stemEindes.push(nu + duur);
+  const osc = c.createOscillator(), g = c.createGain();
+  osc.type = vorm;
+  osc.frequency.setValueAtTime(freq, c.currentTime);
+  if (naar) osc.frequency.exponentialRampToValueAtTime(naar, c.currentTime + duur);
+  g.gain.setValueAtTime(vol, c.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + duur);
+  osc.connect(g); g.connect(master);
+  osc.start();
+  osc.stop(nu + duur);
+}
+
+// tel per soort af zodat 80 ballen geen ratelende puinhoop worden
+function mag(soort, ms){
+  const nu = performance.now();
+  if (laatsteTik[soort] && nu - laatsteTik[soort] < ms) return false;
+  laatsteTik[soort] = nu;
+  return true;
+}
+
+function sfx(soort, arg){
+  if (!geluidAan) return;
+  switch (soort){
+    case "hap":       // toonhoogte loopt op naarmate de bal dieper in het terrein zit
+      if (!mag("hap", 45)) return;
+      toon(300 + (1 - (arg || 0) / TERRAIN_H) * 260, 0.05, "square", 0.16);
+      break;
+    case "wand":
+      if (!mag("wand", 45)) return;
+      toon(880, 0.025, "triangle", 0.1);
+      break;
+    case "paddle":
+      if (!mag("paddle", 40)) return;
+      toon(180, 0.06, "square", 0.18);
+      break;
+    case "kleef":
+      if (!mag("kleef", 60)) return;
+      toon(140, 0.09, "sine", 0.22);
+      break;
+    case "lancering":
+      toon(300, 0.12, "square", 0.2, 700);
+      break;
+    case "powerup":
+      toon(520, 0.07, "square", 0.2);
+      setTimeout(() => toon(780, 0.1, "square", 0.2), 70);
+      break;
+    case "verloren":
+      toon(320, 0.5, "sawtooth", 0.22, 70);
+      break;
+    case "levelklaar":
+      [0, 110, 220, 360].forEach((t, i) => setTimeout(() => toon([392, 523, 659, 784][i], 0.16, "square", 0.2), t));
+      break;
+    case "gameover":
+      [0, 200, 400].forEach((t, i) => setTimeout(() => toon([330, 262, 175][i], 0.35, "sawtooth", 0.2), t));
+      break;
+  }
+}
+
+function zetGeluid(aan){
+  geluidAan = aan === undefined ? !geluidAan : aan;
+  try { localStorage.setItem("pb-geluid", geluidAan ? "aan" : "uit"); } catch (e) {}
+  if (geluidAan) audioAan();
+  updateHud();
+}
+
+/* ---------- schokeffect ---------- */
+let schok = 0;
+function schud(kracht){ schok = Math.min(8, Math.max(schok, kracht)); }
+
+/* ---------- terrein ---------- */
+const grid = new Uint8Array(GW * GH);
+let remainingSoft = 0, totalSoft = 1;
+
+function cellAt(gx, gy){
+  if (gx < 0 || gx >= GW || gy < 0 || gy >= GH) return EMPTY;
+  return grid[gy * GW + gx];
+}
+
+function paintCell(gx, gy){
+  const v = grid[gy * GW + gx];
+  const px = gx * CELL, py = gy * CELL;
+  tctx.clearRect(px, py, CELL, CELL);
+  if (v === SOFT){
+    tctx.fillStyle = ((gx + gy) & 1) ? "#d9c11f" : "#c2ab16";
+    tctx.fillRect(px, py, CELL - 1, CELL - 1);
+  } else if (v === HARD){
+    tctx.fillStyle = "#828a99";
+    tctx.fillRect(px, py, CELL - 1, CELL - 1);
+  }
+}
+
+function redrawTerrainAll(){
+  tctx.clearRect(0, 0, W, TERRAIN_H);
+  for (let gy = 0; gy < GH; gy++)
+    for (let gx = 0; gx < GW; gx++)
+      if (grid[gy * GW + gx]) paintCell(gx, gy);
+}
+
+/* ---------- gangen ----------
+   Een gang is een holle koker door de massa: lege cellen, aan weerszijden een
+   onbreekbare wand, de mond onderaan (daar schiet je de bal in) en een blind
+   uiteinde dat tegen het gele terrein aan ligt. Daar neemt de bal zijn hapjes. */
+const CORR_HALF = 4.5;   // halve gangbreedte in cellen (9 cel = 36px)
+const CORR_WALL = 1;     // wanddikte in cellen
+
+// afstand van een cel tot de gang-as; cap = voorbij het blinde uiteinde
+function pathDist(px, py, pts){
+  let best = Infinity, cap = false;
+  for (let i = 0; i < pts.length - 1; i++){
+    const ax = pts[i][0], ay = pts[i][1];
+    const dx = pts[i+1][0] - ax, dy = pts[i+1][1] - ay;
+    const L2 = dx * dx + dy * dy;
+    const t = L2 ? ((px - ax) * dx + (py - ay) * dy) / L2 : 0;
+    const tc = t < 0 ? 0 : (t > 1 ? 1 : t);
+    const d = Math.hypot(px - (ax + dx * tc), py - (ay + dy * tc));
+    if (d < best){ best = d; cap = (i === pts.length - 2 && t > 1); }
+  }
+  return { d: best, cap };
+}
+
+function pathBox(pts, margin){
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const p of pts){
+    x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]);
+    y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]);
+  }
+  return [
+    Math.max(0, Math.floor(x0 - margin)), Math.max(0, Math.floor(y0 - margin)),
+    Math.min(GW - 1, Math.ceil(x1 + margin)), Math.min(GH - 1, Math.ceil(y1 + margin)),
+  ];
+}
+
+function buildCorridors(paths){
+  const margin = CORR_HALF + CORR_WALL + 2;
+  // eerst alle kokers uithollen ...
+  for (const pts of paths){
+    const [bx0, by0, bx1, by1] = pathBox(pts, margin);
+    for (let gy = by0; gy <= by1; gy++)
+      for (let gx = bx0; gx <= bx1; gx++){
+        const i = gy * GW + gx;
+        if (grid[i] !== SOFT) continue;
+        if (pathDist(gx + 0.5, gy + 0.5, pts).d <= CORR_HALF){ grid[i] = EMPTY; remainingSoft--; }
+      }
+  }
+  // ... daarna pas de wanden, zodat een naburige gang ze niet wegsnijdt
+  for (const pts of paths){
+    const [bx0, by0, bx1, by1] = pathBox(pts, margin);
+    for (let gy = by0; gy <= by1; gy++)
+      for (let gx = bx0; gx <= bx1; gx++){
+        const i = gy * GW + gx;
+        if (grid[i] !== SOFT) continue;
+        const r = pathDist(gx + 0.5, gy + 0.5, pts);
+        if (r.d <= CORR_HALF + CORR_WALL && !r.cap){ grid[i] = HARD; remainingSoft--; }
+      }
+  }
+}
+
+/* Sluit het gele veld aan de onderkant af. De bal kan er van onderaf niet meer bij:
+   de mond van de gang is de enige ingang. De gang is al uitgehold, dus die blijft open. */
+function sealBottom(){
+  for (let gy = GH - 2; gy < GH; gy++)
+    for (let gx = 0; gx < GW; gx++){
+      const i = gy * GW + gx;
+      if (grid[i] === SOFT){ grid[i] = HARD; remainingSoft--; }
+    }
+}
+
+/* Geel dat volledig door wanden is ingesloten kan de bal nooit raken; zonder dit
+   blijft er een restje staan en raakt het level nooit uitgespeeld. */
+function sealPockets(){
+  const seen = new Uint8Array(GW * GH);
+  const stack = [];
+  for (let gx = 0; gx < GW; gx++){          // vanaf de open onderrand naar binnen
+    const i = (GH - 1) * GW + gx;
+    if (grid[i] !== HARD){ seen[i] = 1; stack.push(i); }
+  }
+  while (stack.length){
+    const i = stack.pop(), gx = i % GW, gy = (i / GW) | 0;
+    const visit = (nx, ny) => {
+      if (nx < 0 || nx >= GW || ny < 0 || ny >= GH) return;
+      const j = ny * GW + nx;
+      if (seen[j] || grid[j] === HARD) return;
+      seen[j] = 1; stack.push(j);
+    };
+    visit(gx + 1, gy); visit(gx - 1, gy); visit(gx, gy + 1); visit(gx, gy - 1);
+  }
+  for (let i = 0; i < grid.length; i++)
+    if (grid[i] === SOFT && !seen[i]){ grid[i] = HARD; remainingSoft--; }
+}
+
+let mouthX = W / 2;   // midden van de gangmond: waar de demo-bot op mikt
+
+/* De gangvormen. B is het startpunt onder de terreinrand, zodat de mond openblijft.
+   Elk patroon eindigt blind tegen het geel: daar zit de enige toegang. */
+const PATRONEN = [
+  B => [[34, B], [34, 92], [116, 92]],                            // L naar rechts
+  B => [[24, B], [24, 76], [104, 76]],                            // dieper, langere poot
+  B => [[44, B], [44, 100], [124, 100], [124, 54]],               // haak: rechts en dan omhoog
+  B => [[52, B], [52, 62]],                                       // rechte schacht, blind uiteinde bovenin
+  B => [[30, B], [30, 112], [88, 112], [88, 66], [128, 66]],      // trap met drie bochten
+  B => [[62, B], [62, 84], [18, 84], [18, 40]],                   // spiegelbeeld: naar links en omhoog
+];
+
+function generateLevel(level){
+  grid.fill(SOFT);
+  remainingSoft = GW * GH;
+
+  const B = GH + 3;   // startpunt onder de terreinrand: de mond blijft open
+
+  // Eén gang per level; het uiteinde is de enige plek waar de bal bij het geel kan.
+  // Alle monden liggen links van het midden (kolom 75).
+  const path = PATRONEN[(level - 1) % PATRONEN.length](B);
+
+  mouthX = path[0][0] * CELL;
+  buildCorridors([path]);
+  sealBottom();
+  sealPockets();
+  totalSoft = Math.max(1, remainingSoft);
+  redrawTerrainAll();
+}
+
+/* ---------- spelstaat ---------- */
+const BASE_SPEED = 5.6;
+const PADDLE_Y = H - 70, PADDLE_H = 12;
+const PAD_BASE = 110, PAD_MAX = 250, PAD_MIN = 42;
+const BALL_R = 4;
+const CARVE_R = 2.8;          // erosie-straal in cellen: één hapje per treffer
+const DROP_CHANCE = 0.07;
+const MAX_BALLS = 80;
+
+let state = "ready";           // ready | playing | paused | levelclear | gameover
+let score = 0, lives = 3, level = 1;
+let balls = [], drops = [], parts = [];
+// De paddlebreedte is blijvend, geen timer: donkergroen maakt breder, lichtgroen
+// zet een verbrede paddle terug op de oorspronkelijke maat en knijpt hem anders 10% af.
+let paddle = { x: W / 2, w: PAD_BASE };
+const buffs = { pierce: 0, safe: 0, sticky: 0 };   // resterende stappen
+
+function newBall(x, y, vx, vy, stuck){
+  return { x, y, vx, vy, r: BALL_R, stuck: !!stuck, off: 0, idle: 0 };
+}
+function levelSpeed(){ return Math.min(9, BASE_SPEED + (level - 1) * 0.35); }
+
+// vertrekhoek volgt uit de plek op de paddle; kaarsrecht is verboden (dan boort de bal een schacht)
+function aimAngle(b){
+  const rel = Math.max(-1, Math.min(1, (b.x - paddle.x) / (paddle.w / 2)));
+  const a = rel * 1.05;
+  return Math.abs(a) < 0.14 ? (rel >= 0 ? 0.14 : -0.14) : a;
+}
+
+function clampPaddle(x){ return Math.max(BALL_R, Math.min(W - BALL_R, x)); }
+
+function resetBall(){
+  balls = [ newBall(paddle.x, PADDLE_Y - BALL_R - 1, 0, 0, true) ];
+  state = "ready";
+}
+
+// meetwerk per level, voor het overzicht na afloop
+let frames = 0;
+let ronde = { frames: 0, cellen: 0, powerups: 0, verloren: 0, score: 0 };
+let historie = [];
+
+function startLevel(lv){
+  level = lv;
+  generateLevel(lv);
+  drops.length = 0; parts.length = 0;
+  paddle.w = PAD_BASE;
+  buffs.pierce = buffs.safe = buffs.sticky = 0;
+  ronde = { frames: 0, cellen: 0, powerups: 0, verloren: 0, score };
+  resetBall();
+  updateHud();
+}
+
+function newGame(){
+  score = 0; lives = 3;
+  historie = [];
+  startLevel(1);
+}
+
+function launch(){
+  const sp = levelSpeed();
+  let ging = false;
+  for (const b of balls){
+    if (!b.stuck) continue;
+    b.stuck = false;
+    const a = aimAngle(b);
+    b.vx = Math.sin(a) * sp;
+    b.vy = -Math.cos(a) * sp;
+    ging = true;
+  }
+  if (ging) sfx("lancering");
+  state = "playing";
+}
+
+/* ---------- erosie ---------- */
+let carvedThisStep = false;
+
+function carve(gx, gy){
+  let destroyed = 0;
+  const r = CARVE_R, r2 = r * r, ri = Math.ceil(r);
+  for (let dy = -ri; dy <= ri; dy++){
+    for (let dx = -ri; dx <= ri; dx++){
+      if (dx * dx + dy * dy > r2) continue;
+      const x = gx + dx, y = gy + dy;
+      if (x < 0 || x >= GW || y < 0 || y >= GH) continue;
+      const i = y * GW + x;
+      if (grid[i] !== SOFT) continue;
+      grid[i] = EMPTY;
+      remainingSoft--;
+      destroyed++;
+      tctx.clearRect(x * CELL, y * CELL, CELL, CELL);
+    }
+  }
+  if (destroyed){
+    score += destroyed;
+    ronde.cellen += destroyed;
+    carvedThisStep = true;
+    spawnParticles(gx * CELL + CELL / 2, gy * CELL + CELL / 2, 4, "#e8d24a");
+    sfx("hap", gy * CELL);
+    if (Math.random() < DROP_CHANCE) spawnDrop(gx * CELL, gy * CELL);
+  }
+  return destroyed;
+}
+
+/* ---------- power-ups ---------- */
+const DROP_TYPES = [
+  { id:"multi",  w:20, col:"#22d3ee", label:"+3"  },
+  { id:"wide",   w:18, col:"#15803d", label:"«+»" },   // donkergroen: breder
+  { id:"narrow", w:14, col:"#a7f3d0", label:"«-»" },   // lichtgroen: terug naar normaal, anders 10% smaller
+  { id:"safe",   w:12, col:"#ff9f43", label:"═" },
+  { id:"pierce", w:15, col:"#a855f7", label:"◆" },
+  { id:"sticky", w:15, col:"#fbbf24", label:"◉" },     // kleefpaddle: bal blijft plakken, jij mikt
+  { id:"life",   w:3,  col:"#f472b6", label:"♥" },
+];
+const DROP_TOTAL = DROP_TYPES.reduce((s, d) => s + d.w, 0);
+
+function spawnDrop(x, y){
+  let r = Math.random() * DROP_TOTAL;
+  for (const d of DROP_TYPES){
+    r -= d.w;
+    if (r <= 0){ drops.push({ x, y, vy: 2.2, t: d }); return; }
+  }
+}
+
+// directe power-ups hebben geen looptijd, dus tonen we ~1,2 s een toast-chip
+// die zijn effect bevestigt; de teller bovenin laat het resultaat blijvend zien
+const TOAST_INFO = {
+  multi:  { label: "MULTIBAL",  col: "#22d3ee", fg: "#0b0b0d" },
+  wide:   { label: "PADDLE +",  col: "#15803d", fg: "#ffffff" },
+  narrow: { label: "PADDLE −",  col: "#a7f3d0", fg: "#0b0b0d" },
+  life:   { label: "+1 LEVEN",  col: "#f472b6", fg: "#0b0b0d" },
+};
+let toasts = [];
+
+function applyDrop(id){
+  const SEC = 60;   // stappen per seconde
+  if (id === "multi"){
+    const clones = [];
+    for (const b of balls){
+      if (b.stuck) continue;
+      for (let k = 0; k < 2; k++){
+        if (balls.length + clones.length >= MAX_BALLS) break;
+        const a = (k ? 0.45 : -0.45);
+        const cs = Math.cos(a), sn = Math.sin(a);
+        clones.push(newBall(b.x, b.y, b.vx * cs - b.vy * sn, b.vx * sn + b.vy * cs, false));
+      }
+    }
+    balls.push(...clones);
+  } else if (id === "wide"){
+    paddle.w = Math.min(PAD_MAX, paddle.w * 1.3);
+  } else if (id === "narrow"){
+    paddle.w = paddle.w > PAD_BASE + 0.5 ? PAD_BASE : Math.max(PAD_MIN, paddle.w * 0.9);
+  } else if (id === "safe"){
+    buffs.safe = 15 * SEC;
+  } else if (id === "pierce"){
+    buffs.pierce = 8 * SEC;
+  } else if (id === "sticky"){
+    buffs.sticky = 20 * SEC;
+  } else if (id === "life"){
+    lives++;
+  }
+  if (TOAST_INFO[id]){
+    toasts.push({ info: TOAST_INFO[id], until: performance.now() + 1200 });
+    if (toasts.length > 3) toasts = toasts.slice(-3);   // hooguit de drie recentste tonen
+  }
+  ronde.powerups++;
+  sfx("powerup");
+  schud(2);
+  updateHud();
+}
+
+/* ---------- deeltjes ---------- */
+function spawnParticles(x, y, n, col){
+  if (parts.length > 500) return;
+  for (let i = 0; i < n; i++){
+    const a = Math.random() * Math.PI * 2, s = 0.6 + Math.random() * 2.4;
+    parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 18 + Math.random() * 22, col });
+  }
+}
+
+/* ---------- botsingen ---------- */
+/* Alleen de cellen op de voorrand in de bewegingsrichting tellen mee. Een cel
+   schuin naast de bal mag hem niet blokkeren, anders klapt hij in een hoek
+   eindeloos om zonder ooit te verplaatsen. */
+function leadingCells(cx, cy, r, axis, dir){
+  const out = [];
+  if (axis === "x"){
+    const gx = Math.floor((cx + dir * r) / CELL);
+    const g0 = Math.floor((cy - r) / CELL), g1 = Math.floor((cy + r) / CELL);
+    for (let gy = g0; gy <= g1; gy++){
+      const v = cellAt(gx, gy);
+      if (v) out.push({ gx, gy, v, near: Math.abs((gy + 0.5) * CELL - cy) });
+    }
+  } else {
+    const gy = Math.floor((cy + dir * r) / CELL);
+    const g0 = Math.floor((cx - r) / CELL), g1 = Math.floor((cx + r) / CELL);
+    for (let gx = g0; gx <= g1; gx++){
+      const v = cellAt(gx, gy);
+      if (v) out.push({ gx, gy, v, near: Math.abs((gx + 0.5) * CELL - cx) });
+    }
+  }
+  return out;
+}
+
+// geeft "pass" (doorlopen toegestaan) of "bounce"
+function hitTerrain(cx, cy, r, piercing, axis, dir){
+  const cells = leadingCells(cx, cy, r, axis, dir);
+  if (!cells.length) return "pass";
+  let hard = false, soft = null;
+  for (const c of cells){
+    if (c.v === HARD) hard = true;
+    else if (!soft || c.near < soft.near) soft = c;   // hap midden op het raakpunt
+  }
+  if (soft) carve(soft.gx, soft.gy);
+  if (hard){ sfx("wand"); return "bounce"; }
+  return piercing ? "pass" : (soft ? "bounce" : "pass");
+}
+
+/* Legt de bal net buiten de geraakte cel. Zonder dit blijft hij de wand raken
+   en klapt zijn snelheid elke substap opnieuw om: hij trilt dan vast in een koker. */
+const EPS = 0.01;
+function surface(n, cur, r, s){
+  if (s === 0) return cur;
+  const snap = s > 0
+    ? Math.floor((n + r) / CELL) * CELL - r - EPS
+    : (Math.floor((n - r) / CELL) + 1) * CELL + r + EPS;
+  return s > 0 ? Math.min(cur, snap) : Math.max(cur, snap);
+}
+
+function stepBall(b){
+  if (b.stuck){ b.x = clampPaddle(paddle.x + b.off); b.y = PADDLE_Y - b.r - 1; return; }
+  const piercing = buffs.pierce > 0;
+  const dist = Math.max(Math.abs(b.vx), Math.abs(b.vy));
+  const steps = Math.max(1, Math.ceil(dist / (CELL * 0.5)));
+  carvedThisStep = false;
+
+  for (let s = 0; s < steps; s++){
+    // richting per substap opnieuw bepalen: na een stuiter geldt meteen de nieuwe snelheid
+    const sx = b.vx / steps, sy = b.vy / steps;
+    // horizontaal
+    if (sx !== 0){
+      const nx = b.x + sx;
+      if (hitTerrain(nx, b.y, b.r, piercing, "x", Math.sign(sx)) === "bounce"){
+        b.x = surface(nx, b.x, b.r, sx);
+        b.vx = -b.vx;
+      } else b.x = nx;
+    }
+    // verticaal
+    if (sy !== 0){
+      const ny = b.y + sy;
+      if (hitTerrain(b.x, ny, b.r, piercing, "y", Math.sign(sy)) === "bounce"){
+        b.y = surface(ny, b.y, b.r, sy);
+        b.vy = -b.vy;
+      } else b.y = ny;
+    }
+
+    // wanden
+    if (b.x < b.r){ b.x = b.r; b.vx = Math.abs(b.vx); }
+    if (b.x > W - b.r){ b.x = W - b.r; b.vx = -Math.abs(b.vx); }
+    if (b.y < b.r){ b.y = b.r; b.vy = Math.abs(b.vy); }
+  }
+
+  // paddle
+  const px0 = paddle.x - paddle.w / 2, px1 = paddle.x + paddle.w / 2;
+  if (b.vy > 0 && b.y + b.r >= PADDLE_Y && b.y - b.r <= PADDLE_Y + PADDLE_H &&
+      b.x >= px0 - b.r && b.x <= px1 + b.r){
+    b.y = PADDLE_Y - b.r;
+    if (buffs.sticky > 0){
+      // kleefpaddle: de bal blijft liggen tot je zelf lanceert
+      b.stuck = true;
+      b.off = b.x - paddle.x;
+      b.vx = b.vy = 0;
+      spawnParticles(b.x, PADDLE_Y, 4, "#fbbf24");
+      sfx("kleef");
+    } else {
+      const a = aimAngle(b);
+      const sp = Math.max(levelSpeed(), Math.hypot(b.vx, b.vy));
+      b.vx = Math.sin(a) * sp;
+      b.vy = -Math.cos(a) * sp;
+      spawnParticles(b.x, PADDLE_Y, 3, "#ff8c55");
+      sfx("paddle");
+    }
+  }
+
+  // vangnet
+  if (buffs.safe > 0 && b.vy > 0 && b.y + b.r >= H - 10){
+    b.y = H - 10 - b.r;
+    b.vy = -Math.abs(b.vy);
+    spawnParticles(b.x, H - 10, 4, "#ff9f43");
+  }
+
+  // anti-vastloper: raakt een bal 8 seconden lang niets, dan een minieme koerscorrectie
+  b.idle = (carvedThisStep || b.y > PADDLE_Y - 40) ? 0 : b.idle + 1;
+  if (b.idle > 480){
+    b.idle = 0;
+    const a = (Math.random() < 0.5 ? -1 : 1) * 0.05;
+    const cs = Math.cos(a), sn = Math.sin(a), vx = b.vx;
+    b.vx = vx * cs - b.vy * sn;
+    b.vy = vx * sn + b.vy * cs;
+  }
+}
+
+/* ---------- demo-modus ----------
+   De bot voorspelt waar de bal de paddle bereikt en kiest dan de terugkaatshoek
+   die de gangmond raakt: rechtstreeks, of via een bandje tegen een zijwand. Dat
+   laatste levert de steile invalshoek die diep in de gang komt. */
+let demo = false, demoWait = 0;
+
+function toggleDemo(on){
+  demo = (on === undefined) ? !demo : on;
+  demoWait = 0;
+  updateHud();
+}
+
+/* De bot stuurt met een maximumsnelheid en remt af bij het doel, anders flitst de
+   paddle van plek naar plek. 14px per stap ligt in de buurt van een vlotte muisveeg. */
+const DEMO_SPEED = 14;
+function demoMove(target){
+  const d = (target - paddle.x) * 0.35;
+  movePaddle(paddle.x + Math.max(-DEMO_SPEED, Math.min(DEMO_SPEED, d)));
+}
+
+/* De laagste power-up die de paddle op tijd kan halen én waarna hij nog terug is
+   voordat de eerstvolgende bal beneden is. */
+function pakbareDrop(balTijd){
+  let beste = null, snelste = Infinity;
+  for (const d of drops){
+    const tijd = (PADDLE_Y - 6 - d.y) / d.vy;
+    if (tijd < 0 || tijd >= snelste) continue;
+    if (Math.abs(d.x - paddle.x) > tijd * DEMO_SPEED * 0.8) continue;   // te ver weg
+    if (tijd + 12 > balTijd) continue;                                  // dan liever de bal
+    snelste = tijd; beste = d;
+  }
+  return beste;
+}
+
+// waar komt deze bal op paddlehoogte uit? (onder het terrein is er alleen zijwand)
+function predictX(b){
+  const t = (PADDLE_Y - b.y) / b.vy;
+  const lo = BALL_R, hi = W - BALL_R, span = hi - lo;
+  let u = (b.x + b.vx * t - lo) % (2 * span);
+  if (u < 0) u += 2 * span;
+  return lo + (u <= span ? u : 2 * span - u);
+}
+
+function demoStep(){
+  if (state === "gameover" || state === "levelclear"){
+    if (++demoWait > 120){ demoWait = 0; state === "gameover" ? newGame() : startLevel(level + 1); }
+    return;
+  }
+  if (state !== "playing" && state !== "ready") return;
+
+  const dy = PADDLE_Y - TERRAIN_H;
+
+  // bal op de paddle: zo neerleggen dat de vaste vertreklijn de mond raakt
+  const vast = balls.find(b => b.stuck);
+  if (vast){
+    const a = aimAngle(vast);
+    demoMove(mouthX - Math.tan(a) * dy - vast.off);
+    if (++demoWait > 25){ demoWait = 0; launch(); }
+    return;
+  }
+
+  // Alleen ballen in de vrije ruimte tellen mee. Een bal die in het terrein
+  // rondketst heeft een onvoorspelbare baan; die volgen kost alleen power-ups.
+  let doel = null, snelste = Infinity;
+  for (const b of balls){
+    if (b.vy <= 0 || b.y < TERRAIN_H) continue;
+    const t = (PADDLE_Y - b.y) / b.vy;
+    if (t >= 0 && t < snelste){ snelste = t; doel = b; }
+  }
+
+  // zolang er niets op korte termijn naar beneden komt: power-ups oprapen
+  if (snelste > 40){
+    const buit = pakbareDrop(snelste);
+    if (buit){ demoMove(buit.x); return; }
+  }
+
+  // niets te doen: midden op het veld wachten, van daaruit haalt hij beide kanten
+  if (!doel){ demoMove(W / 2); return; }
+
+  const land = predictX(doel);
+
+  // mikhoek kiezen: rechtstreeks of gespiegeld via de linker- of rechterwand
+  let hoek = null, beste = Infinity;
+  for (const tgt of [mouthX, -mouthX, 2 * W - mouthX]){
+    const a = Math.atan((tgt - land) / dy);
+    if (Math.abs(a) > 1.05) continue;                    // die hoek kan de paddle niet geven
+    const afwijking = Math.abs(Math.abs(a) - 0.7);       // ~40° komt het diepst de gang in
+    if (afwijking < beste){ beste = afwijking; hoek = a; }
+  }
+  if (hoek === null) hoek = mouthX < land ? -0.7 : 0.7;
+
+  const rel = Math.max(-1, Math.min(1, hoek / 1.05));
+  demoMove(land - rel * (paddle.w / 2));
+}
+
+/* ---------- update ---------- */
+function update(){
+  if (state === "playing"){
+    frames++; ronde.frames++;
+    for (const k in buffs) if (buffs[k] > 0) buffs[k]--;
+
+    for (const b of balls) stepBall(b);
+    balls = balls.filter(b => b.y - b.r < H);
+
+    if (!balls.length){
+      lives--;
+      ronde.verloren++;
+      schud(6);
+      if (lives <= 0){ state = "gameover"; sfx("gameover"); boekRonde(); }
+      else { paddle.w = PAD_BASE; buffs.pierce = 0; sfx("verloren"); resetBall(); }
+      updateHud();
+    }
+
+    if (remainingSoft <= 0){
+      score += 500;
+      state = "levelclear";
+      schud(4);
+      sfx("levelklaar");
+      boekRonde();
+      updateHud();
+    }
+  } else if (state === "ready"){
+    for (const b of balls) if (b.stuck){ b.x = clampPaddle(paddle.x + b.off); b.y = PADDLE_Y - b.r - 1; }
+  }
+
+  if (state === "playing" || state === "ready"){
+    // vallende power-ups
+    for (const d of drops) d.y += d.vy;
+    const px0 = paddle.x - paddle.w / 2, px1 = paddle.x + paddle.w / 2;
+    drops = drops.filter(d => {
+      if (d.y + 9 >= PADDLE_Y && d.y - 9 <= PADDLE_Y + PADDLE_H && d.x >= px0 - 9 && d.x <= px1 + 9){
+        applyDrop(d.t.id);
+        spawnParticles(d.x, d.y, 10, d.t.col);
+        return false;
+      }
+      return d.y - 9 < H;
+    });
+  }
+
+  for (const p of parts){ p.x += p.vx; p.y += p.vy; p.vy += 0.06; p.life--; }
+  parts = parts.filter(p => p.life > 0);
+
+  if (schok > 0.05) schok *= 0.86; else schok = 0;
+}
+
+// een afgeronde (of afgebroken) ronde in het overzicht zetten
+function boekRonde(){
+  historie.push({
+    level,
+    frames: ronde.frames,
+    cellen: ronde.cellen,
+    powerups: ronde.powerups,
+    verloren: ronde.verloren,
+    punten: score - ronde.score,
+    gehaald: remainingSoft <= 0,
+  });
+}
+
+function tijd(f){
+  const s = Math.round(f / 60);
+  return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+}
+const getal = n => n.toLocaleString("nl-NL");
+
+/* ---------- tekenen ---------- */
+function draw(){
+  ctx.clearRect(0, 0, W, H);
+
+  // schokeffect: alleen bij gebeurtenissen, niet bij elke hap (dat wordt getril)
+  const sx = schok ? (Math.random() * 2 - 1) * schok : 0;
+  const sy = schok ? (Math.random() * 2 - 1) * schok : 0;
+  ctx.save();
+  if (schok) ctx.translate(sx, sy);
+
+  // terreinlaag (offscreen, alleen gewijzigde cellen worden bijgewerkt)
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, sx * scale, sy * scale);
+  ctx.drawImage(terrain, 0, 0);
+  ctx.restore();
+
+  // scheidingslijn onder het terrein
+  ctx.fillStyle = "#1d1d22";
+  ctx.fillRect(0, TERRAIN_H, W, 2);
+
+  // power-ups
+  for (const d of drops){
+    ctx.beginPath();
+    ctx.arc(d.x, d.y, 9, 0, Math.PI * 2);
+    ctx.fillStyle = d.t.col;
+    ctx.fill();
+    ctx.fillStyle = "#0b0b0d";
+    ctx.font = "bold 10px Consolas, monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(d.t.label, d.x, d.y + 0.5);
+  }
+
+  // deeltjes
+  for (const p of parts){
+    ctx.globalAlpha = Math.min(1, p.life / 20);
+    ctx.fillStyle = p.col;
+    ctx.fillRect(p.x - 1, p.y - 1, 2.5, 2.5);
+  }
+  ctx.globalAlpha = 1;
+
+  // vangnet
+  if (buffs.safe > 0){
+    ctx.fillStyle = buffs.safe < 120 && (buffs.safe >> 3) % 2 ? "#7a3a18" : "#ff6b35";
+    ctx.fillRect(0, H - 10, W, 6);
+  }
+
+  // paddle (kleefrand als de kleefpaddle actief is)
+  ctx.fillStyle = "#ff6b35";
+  ctx.fillRect(paddle.x - paddle.w / 2, PADDLE_Y, paddle.w, PADDLE_H);
+  if (buffs.sticky > 0){
+    ctx.fillStyle = "#fbbf24";
+    ctx.fillRect(paddle.x - paddle.w / 2, PADDLE_Y, paddle.w, 3);
+  }
+
+  // mikstreep voor een bal die op de paddle ligt
+  ctx.setLineDash([3, 5]);
+  ctx.strokeStyle = "rgba(255,255,255,0.4)";
+  for (const b of balls){
+    if (!b.stuck) continue;
+    const a = aimAngle(b);
+    ctx.beginPath();
+    ctx.moveTo(b.x, b.y);
+    ctx.lineTo(b.x + Math.sin(a) * 120, b.y - Math.cos(a) * 120);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  // ballen
+  ctx.fillStyle = buffs.pierce > 0 ? "#c084fc" : "#ffffff";
+  for (const b of balls){
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // voortgangsbalk bovenaan
+  const done = 1 - remainingSoft / totalSoft;
+  ctx.fillStyle = "#1d1d22";
+  ctx.fillRect(0, 0, W, 3);
+  ctx.fillStyle = "#d9c11f";
+  ctx.fillRect(0, 0, W * done, 3);
+
+  ctx.restore();          // einde schokeffect: het overzicht staat stil
+  if (state !== "playing") drawOverlay();
+}
+
+/* Regels voor het overzichtspaneel: [label, waarde] of ["", ""] als tussenruimte. */
+function overzichtRegels(){
+  if (state === "levelclear"){
+    const r = historie[historie.length - 1] || ronde;
+    return [
+      ["tijd", tijd(r.frames)],
+      ["cellen gesloopt", getal(r.cellen || 0)],
+      ["power-ups", String(r.powerups || 0)],
+      ["ballen kwijt", String(r.verloren || 0)],
+      ["punten dit level", getal(r.punten || 0)],
+      ["", ""],
+      ["totaalscore", getal(score)],
+    ];
+  }
+  if (state === "gameover"){
+    const regels = [["levels", "tijd", "punten"]];
+    for (const r of historie.slice(-8))
+      regels.push(["level " + r.level + (r.gehaald ? "" : " (afgebroken)"), tijd(r.frames), getal(r.punten)]);
+    regels.push(["", "", ""]);
+    regels.push(["totaal", tijd(historie.reduce((s, r) => s + r.frames, 0)), getal(score)]);
+    return regels;
+  }
+  return null;
+}
+
+function drawOverlay(){
+  const msg = {
+    ready:      ["KLAAR", "klik of spatie om te lanceren"],
+    paused:     ["PAUZE", "P of klik om verder te gaan"],
+    levelclear: ["LEVEL " + level + " GESLOOPT", "klik of spatie voor level " + (level + 1)],
+    gameover:   ["GAME OVER", "R of klik om opnieuw te beginnen"],
+  }[state];
+  if (!msg) return;
+
+  const regels = overzichtRegels();
+  if (state !== "ready"){
+    ctx.fillStyle = "rgba(11,11,13,0.82)";
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  const midden = regels ? H / 2 - 40 - regels.length * 9 : H / 2;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 28px Consolas, monospace";
+  ctx.fillText(msg[0], W / 2, midden - 18);
+
+  if (regels){
+    const x0 = W / 2 - 150, x1 = W / 2 + 150;
+    let y = midden + 24;
+    ctx.strokeStyle = "#2b2b33";
+    ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+    y += 18;
+    ctx.font = "13px Consolas, monospace";
+    for (const rij of regels){
+      if (rij[0] === ""){ y += 8; continue; }
+      const kop = rij === regels[0] && state === "gameover";
+      ctx.fillStyle = kop ? "#6b6b76" : "#a8a8b2";
+      ctx.textAlign = "left";
+      ctx.fillText(rij[0], x0, y);
+      ctx.fillStyle = kop ? "#6b6b76" : "#ffffff";
+      ctx.textAlign = "right";
+      if (rij.length === 3){
+        ctx.fillText(rij[1], x1 - 90, y);
+        ctx.fillText(rij[2], x1, y);
+      } else {
+        ctx.fillText(rij[1], x1, y);
+      }
+      y += 20;
+    }
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#8b8b95";
+    ctx.font = "13px Consolas, monospace";
+    ctx.fillText(msg[1], W / 2, y + 14);
+  } else {
+    ctx.fillStyle = "#8b8b95";
+    ctx.font = "14px Consolas, monospace";
+    ctx.fillText(msg[1], W / 2, midden + 16);
+  }
+}
+
+/* ---------- HUD ---------- */
+const hud = {
+  score: document.getElementById("hScore"),
+  level: document.getElementById("hLevel"),
+  lives: document.getElementById("hLives"),
+  balls: document.getElementById("hBalls"),
+  paddle: document.getElementById("hPaddle"),
+  clear: document.getElementById("hClear"),
+  demoBtn: document.getElementById("demoBtn"),
+  soundBtn: document.getElementById("soundBtn"),
+  status: document.getElementById("status"),
+};
+const BUFF_INFO = {
+  sticky: { label: "KLEEF",    col: "#fbbf24", fg: "#0b0b0d" },
+  pierce: { label: "DOORBOOR", col: "#a855f7", fg: "#0b0b0d" },
+  safe:   { label: "VANGNET",  col: "#ff9f43", fg: "#0b0b0d" },
+};
+const chipHtml = (t, bg, fg, extra) =>
+  '<span class="chip' + (extra ? " " + extra : "") +
+  '" style="background:' + bg + ';color:' + fg + '">' + t + "</span>";
+hud.demoBtn.addEventListener("click", () => { toggleDemo(); hud.demoBtn.blur(); });
+hud.soundBtn.addEventListener("click", () => { zetGeluid(); hud.soundBtn.blur(); });
+let hudTick = 0;
+function updateHud(){
+  hud.score.textContent = score;
+  hud.level.textContent = level;
+  hud.lives.textContent = lives;
+  hud.balls.textContent = balls.length;
+  hud.clear.textContent = Math.round((1 - remainingSoft / totalSoft) * 100) + "%";
+
+  hud.paddle.textContent = Math.round(paddle.w / PAD_BASE * 100) + "%";
+
+  hud.demoBtn.classList.toggle("aan", demo);
+  hud.soundBtn.classList.toggle("uit", !geluidAan);
+
+  let html = "";
+  if (demo)   html += chipHtml("DEMO", "#ff6b35", "#0b0b0d");
+  if (locked) html += chipHtml("MUIS VAST · ESC", "#6b7280", "#ffffff");
+  for (const k in BUFF_INFO)
+    if (buffs[k] > 0)
+      html += chipHtml(BUFF_INFO[k].label + " " + Math.ceil(buffs[k] / 60), BUFF_INFO[k].col, BUFF_INFO[k].fg);
+  const nu = performance.now();
+  toasts = toasts.filter(t => t.until > nu);
+  for (const t of toasts)
+    html += chipHtml(t.info.label, t.info.col, t.info.fg, "toast");
+
+  // alleen bij een echte wijziging hertekenen: anders herstart de toast-animatie
+  // elke 6 frames en flikkert de chip
+  if (html !== laatsteStatus){ laatsteStatus = html; hud.status.innerHTML = html; }
+}
+let laatsteStatus = "";
+
+/* ---------- invoer ---------- */
+function pointerX(e){
+  const r = cv.getBoundingClientRect();
+  const cx = (e.touches ? e.touches[0].clientX : e.clientX);
+  return ((cx - r.left) / r.width) * W;
+}
+function movePaddle(x){
+  paddle.x = Math.max(paddle.w / 2, Math.min(W - paddle.w / 2, x));
+}
+/* Twee muismodi. Gevangen (Pointer Lock): de cursor verdwijnt en de paddle volgt
+   relatieve beweging, dus je kunt oneindig doorschuiven — Esc laat weer los.
+   Los: absolute positie, op window en niet op het canvas, zodat de paddle blijft
+   volgen als de cursor het veld verlaat. */
+let locked = false;
+
+document.addEventListener("pointerlockchange", () => {
+  locked = document.pointerLockElement === cv;
+  updateHud();
+});
+document.addEventListener("pointerlockerror", () => { locked = false; updateHud(); });
+
+window.addEventListener("pointermove", e => {
+  if (demo) return;                                // in demo stuurt de bot
+  if (locked){
+    const r = cv.getBoundingClientRect();
+    const perPx = r.width ? W / r.width : 1;      // schermpixels → veldpixels
+    movePaddle(paddle.x + e.movementX * perPx);
+  } else {
+    movePaddle(pointerX(e));
+  }
+});
+
+cv.addEventListener("pointerdown", e => {
+  audioAan();                                    // browsers laten geluid pas toe na een gebaar
+  if (demo){ toggleDemo(false); e.preventDefault(); return; }   // klik = zelf overnemen
+  if (!locked){
+    movePaddle(pointerX(e));
+    if (cv.requestPointerLock){
+      const p = cv.requestPointerLock();
+      if (p && p.catch) p.catch(() => {});         // geweigerd: gewoon los blijven werken
+    }
+  }
+  primary();
+  e.preventDefault();
+});
+
+function primary(){
+  if (state === "paused") state = "playing";   // klik/tik hervat ook (zonder toetsenbord kon dat niet)
+  else if (state === "ready") launch();
+  else if (state === "playing"){ if (balls.some(b => b.stuck)) launch(); }
+  else if (state === "levelclear") startLevel(level + 1);
+  else if (state === "gameover") newGame();
+}
+
+const keys = {};
+window.addEventListener("keydown", e => {
+  keys[e.key] = true;
+  audioAan();                                    // eerste toets telt als toestemming voor geluid
+  if (e.key === "d" || e.key === "D"){ toggleDemo(); e.preventDefault(); return; }
+  if (e.key === "m" || e.key === "M"){ zetGeluid(); e.preventDefault(); return; }
+  if (demo && (e.key === " " || e.key === "ArrowLeft" || e.key === "ArrowRight")) toggleDemo(false);
+  if (e.key === " "){ primary(); e.preventDefault(); }
+  if (e.key === "p" || e.key === "P"){
+    if (state === "playing") state = "paused";
+    else if (state === "paused") state = "playing";
+  }
+  if (e.key === "r" || e.key === "R") newGame();
+});
+window.addEventListener("keyup", e => { keys[e.key] = false; });
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden && state === "playing") state = "paused";
+});
+
+function keyboardPaddle(){
+  const sp = 9;
+  if (keys.ArrowLeft)  movePaddle(paddle.x - sp);
+  if (keys.ArrowRight) movePaddle(paddle.x + sp);
+}
+
+/* ---------- lus (vaste tijdstap) ---------- */
+const STEP = 1000 / 60;
+let last = performance.now(), acc = 0;
+
+function frame(now){
+  acc += now - last;
+  last = now;
+  if (acc > 250) acc = 250;               // na tab-wissel niet inhalen
+  let n = 0;
+  while (acc >= STEP && n++ < 5){
+    if (demo) demoStep(); else keyboardPaddle();
+    update();
+    acc -= STEP;
+  }
+  draw();
+  if (++hudTick % 6 === 0) updateHud();
+  requestAnimationFrame(frame);
+}
+
+newGame();
+resize();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
