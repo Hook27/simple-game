@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Spelletjes</title>
   <link rel="stylesheet" href="stijl.css">
+  <script src="nav.js" defer></script>
   <style>
     .hero {
       text-align: center;
@@ -39,13 +40,22 @@
       line-height: 1.6;
     }
 
+    /* 4 kaarten: naast elkaar op brede schermen, 2×2 daaronder, 1 kolom op een telefoon */
     .spellen-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      grid-template-columns: 1fr;
       gap: 20px;
       width: 100%;
-      max-width: 840px;
+      max-width: 560px;
       margin-top: 8px;
+    }
+
+    @media (min-width: 520px) {
+      .spellen-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media (min-width: 940px) {
+      .spellen-grid { grid-template-columns: repeat(4, 1fr); max-width: 960px; }
     }
 
     .spel-kaart {
@@ -101,6 +111,7 @@
       color: #90cdf4;
       line-height: 1.5;
       margin-bottom: 8px;
+      flex: 1; /* vult de ruimte, zodat badge en knop in elke kaart op dezelfde hoogte staan */
     }
 
     .kaart-badge {
@@ -146,6 +157,7 @@
       <a href="geheugen-spel.html" class="nav-tab">Geheugen spel</a>
       <a href="vier-op-rij.html" class="nav-tab">Vier op een rij</a>
       <a href="rots-papier-schaar.html" class="nav-tab">Rots-Papier-Schaar</a>
+      <a href="pixel-breakout.html" class="nav-tab">Pixel Breakout</a>
     </div>
   </nav>
 
@@ -153,7 +165,7 @@
     <div class="hero">
       <span class="hero-emoji">🎮</span>
       <h1>Spelletjes</h1>
-      <p>Drie gratis spelletjes om direct te spelen.<br>Kies een spel en begin!</p>
+      <p>Vier gratis spelletjes om direct te spelen.<br>Kies een spel en begin!</p>
     </div>
 
     <div class="spellen-grid">
@@ -179,6 +191,14 @@
         <div class="kaart-naam">Rots-Papier-Schaar</div>
         <div class="kaart-beschrijving">Het klassieke handspel. Kies je wapen en versla de computer in een reeks rondes.</div>
         <span class="kaart-badge">⚡ Snel spel</span>
+        <span class="spelen-pijl">Spelen →</span>
+      </a>
+
+      <a href="pixel-breakout.html" class="spel-kaart">
+        <span class="kaart-emoji">🧱</span>
+        <div class="kaart-naam">Pixel Breakout</div>
+        <div class="kaart-beschrijving">Mik de bal de gang in en sloop het gele terrein hapje voor hapje. Met power-ups en een demo-modus.</div>
+        <span class="kaart-badge">🕹️ Arcade</span>
         <span class="spelen-pijl">Spelen →</span>
       </a>
 
