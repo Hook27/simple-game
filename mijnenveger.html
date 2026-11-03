@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mijnenveger</title>
+  <link rel="icon" href="icons/mijnenveger.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="stijl.css">
+  <script src="nav.js" defer></script>
+  <style>
+    .werkbalk {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 10px;
+    }
+
+    .modus-knop {
+      padding: 6px 14px;
+      border: 1.5px solid rgba(99,179,237,0.3);
+      border-radius: 50px;
+      background: rgba(255,255,255,0.06);
+      color: #e2e8f0;
+      font-size: 0.82rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .modus-knop.vlag { background: rgba(229,62,62,0.25); border-color: #fc8181; color: #fff; }
+
+    .veld {
+      --kolommen: 9;
+      /* schermbreedte min paginamarge (20px), rand+padding (16px) en de tussenruimtes */
+      --cel: min(34px, calc((100vw - 40px - (var(--kolommen) - 1) * 2px) / var(--kolommen)));
+      display: grid;
+      grid-template-columns: repeat(var(--kolommen), var(--cel));
+      gap: 2px;
+      padding: 6px;
+      margin-bottom: 12px;
+      background: linear-gradient(145deg, #1e3a5f, #152a4a);
+      border: 2px solid rgba(99,179,237,0.3);
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;   /* geen menu bij lang indrukken op iPhone */
+      touch-action: manipulation;
+    }
+
+    .cel {
+      width: var(--cel);
+      height: var(--cel);
+      border: none;
+      border-radius: 5px;
+      padding: 0;
+      background: linear-gradient(145deg, #4a6fa5, #375a8c);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 1px 2px rgba(0,0,0,0.3);
+      font-family: inherit;
+      font-size: calc(var(--cel) * 0.55);
+      font-weight: 800;
+      line-height: 1;
+      color: #fff;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .cel:not(.open):hover { background: linear-gradient(145deg, #5a80b8, #44689c); }
+    .cel.open {
+      background: rgba(0,0,0,0.3);
+      box-shadow: none;
+      cursor: default;
+    }
+    .cel.open.n1 { color: #63b3ed; }
+    .cel.open.n2 { color: #68d391; }
+    .cel.open.n3 { color: #fc8181; }
+    .cel.open.n4 { color: #b794f4; }
+    .cel.open.n5 { color: #f6ad55; }
+    .cel.open.n6 { color: #4fd1c5; }
+    .cel.open.n7 { color: #f687b3; }
+    .cel.open.n8 { color: #e2e8f0; }
+    .cel.mijn      { background: rgba(229,62,62,0.25); }
+    .cel.ontploft  { background: #e53e3e; }
+    .cel.fout-vlag { background: rgba(236,201,75,0.2); }
+
+    .uitleg {
+      font-size: 0.75rem;
+      color: rgba(144,205,244,0.7);
+      text-align: center;
+      max-width: 460px;
+      line-height: 1.5;
+    }
+    .uitleg .aanraak { display: none; }
+    @media (pointer: coarse) {
+      .uitleg .muis { display: none; }
+      .uitleg .aanraak { display: inline; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-logo">🎮 <span>Spelletjes</span></a>
+      <a href="geheugen-spel.html" class="nav-tab">Geheugen spel</a>
+      <a href="vier-op-rij.html" class="nav-tab">Vier op een rij</a>
+      <a href="rots-papier-schaar.html" class="nav-tab">Rots-Papier-Schaar</a>
+      <a href="pixel-breakout.html" class="nav-tab">Pixel Breakout</a>
+      <a href="boter-kaas-en-eieren.html" class="nav-tab">Boter-kaas-en-eieren</a>
+      <a href="galgje.html" class="nav-tab">Galgje</a>
+      <a href="slang.html" class="nav-tab">Slang</a>
+      <a href="mijnenveger.html" class="nav-tab actief">Mijnenveger</a>
+    </div>
+  </nav>
+
+  <div class="pagina">
+    <h1 class="spel-titel">Mijnenveger</h1>
+    <p class="spel-subtitel">Open alle vakjes zonder mijn. Een cijfer zegt hoeveel mijnen eromheen liggen.</p>
+
+    <div class="niveau-knoppen" id="niveau-knoppen">
+      <button class="niveau-knop actief" data-niveau="makkelijk">😊 Makkelijk</button>
+      <button class="niveau-knop" data-niveau="normaal">🧠 Normaal</button>
+      <button class="niveau-knop" data-niveau="moeilijk">💀 Moeilijk</button>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="stat-label">Mijnen</div><div class="stat-value" id="mijnen-over">0</div></div>
+      <div class="stat"><div class="stat-label">Tijd</div><div class="stat-value" id="tijd">0</div></div>
+      <div class="stat"><div class="stat-label">Record</div><div class="stat-value" id="record">–</div></div>
+    </div>
+
+    <div class="werkbalk">
+      <button class="modus-knop" id="modus" type="button">⛏️ Graven</button>
+      <button class="knop" id="opnieuw" type="button">Opnieuw</button>
+    </div>
+
+    <div class="veld" id="veld"></div>
+
+    <p class="uitleg">
+      <span class="muis">Klik = openen · rechtsklik = vlaggetje · klik op een cijfer met genoeg vlaggetjes eromheen = de rest openen</span>
+      <span class="aanraak">Tik = openen · lang indrukken of de knop ⛏️/🚩 = vlaggetje · tik op een cijfer met genoeg vlaggetjes eromheen = de rest openen</span>
+    </p>
+  </div>
+
+  <div class="overlay" id="overlay">
+    <div class="popup">
+      <span class="popup-emoji" id="popup-emoji"></span>
+      <div class="popup-titel" id="popup-titel"></div>
+      <div class="popup-tekst" id="popup-tekst"></div>
+      <button class="knop" id="popup-opnieuw">Nog een keer!</button>
+    </div>
+  </div>
+
+  <script>
+    const NIVEAUS = {
+      makkelijk: { k: 9,  r: 9,  mijnen: 10 },
+      normaal:   { k: 12, r: 12, mijnen: 24 },
+      moeilijk:  { k: 14, r: 14, mijnen: 38 },
+    };
+
+    let niveau = 'makkelijk';
+    let K, R, AANTAL;
+    let mijn, open, vlag, buren;      // per vakje (index = r * K + k)
+    let gestart, klaar, geopend, vlaggen;
+    let startTijd = 0, klokTimer = null;
+    let vlagModus = false;
+    let spelId = 0;
+
+    const veldEl = document.getElementById('veld');
+    let cellen = [];
+
+    /* ── Record per niveau (alleen in deze browser) ── */
+    const recordSleutel = () => 'mijnenveger-record-' + niveau;
+    function leesRecord() {
+      try { return Number(localStorage.getItem(recordSleutel())) || 0; } catch (e) { return 0; }
+    }
+    function bewaarRecord(s) {
+      try { localStorage.setItem(recordSleutel(), String(s)); } catch (e) {}
+    }
+
+    /* ── Hulp ───────────────────────────── */
+    function rondom(i) {
+      const k = i % K, r = (i / K) | 0, uit = [];
+      for (let dr = -1; dr <= 1; dr++)
+        for (let dk = -1; dk <= 1; dk++) {
+          if (!dr && !dk) continue;
+          const nk = k + dk, nr = r + dr;
+          if (nk >= 0 && nk < K && nr >= 0 && nr < R) uit.push(nr * K + nk);
+        }
+      return uit;
+    }
+
+    // mijnen pas leggen na de eerste klik: dat vakje en zijn buren zijn altijd veilig
+    function legMijnen(veilig) {
+      const verboden = new Set([veilig, ...rondom(veilig)]);
+      const kandidaten = [];
+      for (let i = 0; i < K * R; i++) if (!verboden.has(i)) kandidaten.push(i);
+      for (let n = 0; n < AANTAL && kandidaten.length; n++) {
+        const j = Math.floor(Math.random() * kandidaten.length);
+        mijn[kandidaten[j]] = true;
+        kandidaten[j] = kandidaten[kandidaten.length - 1];
+        kandidaten.pop();
+      }
+      for (let i = 0; i < K * R; i++) buren[i] = rondom(i).filter(j => mijn[j]).length;
+    }
+
+    /* ── Weergave ───────────────────────── */
+    function tekenCel(i) {
+      const c = cellen[i];
+      let klasse = 'cel', tekst = '';
+      if (open[i]) {
+        klasse += ' open';
+        if (mijn[i]) tekst = '💣';
+        else if (buren[i]) { tekst = buren[i]; klasse += ' n' + buren[i]; }
+      } else if (vlag[i]) tekst = '🚩';
+      c.className = klasse;
+      c.textContent = tekst;
+    }
+
+    function tekenTellers() {
+      document.getElementById('mijnen-over').textContent = AANTAL - vlaggen;
+      const rec = leesRecord();
+      document.getElementById('record').textContent = rec ? rec + 's' : '–';
+    }
+
+    function zetKlok(s) { document.getElementById('tijd').textContent = s; }
+
+    /* ── Acties ─────────────────────────── */
+    function openVak(i) {
+      if (klaar || open[i] || vlag[i]) return;
+      if (!gestart) {
+        legMijnen(i);
+        gestart = true;
+        startTijd = performance.now();
+        klokTimer = setInterval(() => zetKlok(Math.floor((performance.now() - startTijd) / 1000)), 250);
+      }
+      if (mijn[i]) return verlies(i);
+
+      // lege vakjes openen hun buren vanzelf (zonder recursie, ook bij grote velden)
+      const stapel = [i];
+      while (stapel.length) {
+        const j = stapel.pop();
+        if (open[j] || vlag[j]) continue;
+        open[j] = true;
+        geopend++;
+        tekenCel(j);
+        if (buren[j] === 0) for (const b of rondom(j)) if (!open[b] && !mijn[b]) stapel.push(b);
+      }
+      if (geopend === K * R - AANTAL) winst();
+    }
+
+    function wisselVlag(i) {
+      if (klaar || open[i]) return;
+      vlag[i] = !vlag[i];
+      vlaggen += vlag[i] ? 1 : -1;
+      tekenCel(i);
+      tekenTellers();
+      if (navigator.vibrate) navigator.vibrate(15);
+    }
+
+    // klik op een geopend cijfer: staan er genoeg vlaggetjes omheen, open dan de rest
+    function akkoord(i) {
+      if (klaar || !open[i] || !buren[i]) return;
+      const rond = rondom(i);
+      if (rond.filter(j => vlag[j]).length !== buren[i]) return;
+      for (const j of rond) if (!open[j] && !vlag[j]) { openVak(j); if (klaar) return; }
+    }
+
+    function klikOp(i) {
+      if (open[i]) akkoord(i);
+      else if (vlagModus) wisselVlag(i);
+      else openVak(i);
+    }
+
+    /* ── Einde ──────────────────────────── */
+    function stopKlok() { clearInterval(klokTimer); klokTimer = null; }
+
+    function verlies(i) {
+      klaar = true;
+      stopKlok();
+      for (let j = 0; j < K * R; j++) {
+        if (mijn[j] && !vlag[j]) { open[j] = true; tekenCel(j); cellen[j].classList.add('mijn'); }
+        else if (vlag[j] && !mijn[j]) cellen[j].classList.add('fout-vlag');
+      }
+      cellen[i].classList.add('ontploft');
+      toonPopup('💥', 'Boem!', 'Je raakte een mijn. Probeer het nog eens!');
+    }
+
+    function winst() {
+      klaar = true;
+      stopKlok();
+      const s = Math.max(1, Math.round((performance.now() - startTijd) / 1000));
+      zetKlok(s);
+      // alle mijnen netjes markeren
+      for (let j = 0; j < K * R; j++) if (mijn[j] && !vlag[j]) { vlag[j] = true; tekenCel(j); }
+      vlaggen = AANTAL;
+      const oud = leesRecord();
+      const nieuw = !oud || s < oud;
+      if (nieuw) bewaarRecord(s);
+      tekenTellers();
+      const sec = n => n + (n === 1 ? ' seconde' : ' seconden');
+      toonPopup(nieuw ? '🎉' : '🏆', 'Veld geveegd!',
+        `Klaar in ${sec(s)}.` + (nieuw ? ' Nieuw record!' : ` Record: ${sec(oud)}.`));
+    }
+
+    function toonPopup(emoji, titel, tekst) {
+      const id = spelId;
+      setTimeout(() => {
+        if (id !== spelId) return;
+        document.getElementById('popup-emoji').textContent = emoji;
+        document.getElementById('popup-titel').textContent = titel;
+        document.getElementById('popup-tekst').textContent = tekst;
+        document.getElementById('overlay').classList.add('toon');
+      }, 900);
+    }
+
+    /* ── Nieuw spel ─────────────────────── */
+    function nieuwSpel() {
+      spelId++;
+      stopKlok();
+      ({ k: K, r: R, mijnen: AANTAL } = NIVEAUS[niveau]);
+      mijn = new Array(K * R).fill(false);
+      open = new Array(K * R).fill(false);
+      vlag = new Array(K * R).fill(false);
+      buren = new Array(K * R).fill(0);
+      gestart = false; klaar = false; geopend = 0; vlaggen = 0;
+      zetKlok(0);
+      tekenTellers();
+      document.getElementById('overlay').classList.remove('toon');
+
+      veldEl.style.setProperty('--kolommen', K);
+      veldEl.innerHTML = '';
+      cellen = [];
+      for (let i = 0; i < K * R; i++) {
+        const c = document.createElement('button');
+        c.type = 'button';
+        c.className = 'cel';
+        c.dataset.i = i;
+        veldEl.appendChild(c);
+        cellen.push(c);
+      }
+    }
+
+    /* ── Invoer: klik, rechtsklik en lang indrukken ── */
+    let drukTimer = null, langGedrukt = false, drukStart = null;
+
+    veldEl.addEventListener('pointerdown', e => {
+      const c = e.target.closest('.cel');
+      if (!c || e.button !== 0) return;
+      langGedrukt = false;
+      drukStart = [e.clientX, e.clientY];
+      if (e.pointerType !== 'mouse') {
+        const i = Number(c.dataset.i);
+        drukTimer = setTimeout(() => {
+          drukTimer = null;
+          langGedrukt = true;
+          if (!open[i]) wisselVlag(i);
+        }, 420);
+      }
+    });
+    function stopDruk() { clearTimeout(drukTimer); drukTimer = null; }
+    veldEl.addEventListener('pointermove', e => {
+      // vinger verschuift (scrollen): geen lang-indrukken
+      if (drukTimer && drukStart && Math.hypot(e.clientX - drukStart[0], e.clientY - drukStart[1]) > 10) stopDruk();
+    });
+    veldEl.addEventListener('pointerup', stopDruk);
+    veldEl.addEventListener('pointercancel', stopDruk);
+
+    veldEl.addEventListener('click', e => {
+      const c = e.target.closest('.cel');
+      if (!c) return;
+      if (langGedrukt) { langGedrukt = false; return; }   // was al een vlaggetje
+      klikOp(Number(c.dataset.i));
+    });
+    veldEl.addEventListener('contextmenu', e => {
+      const c = e.target.closest('.cel');
+      if (!c) return;
+      e.preventDefault();
+      if (langGedrukt) return;   // lang indrukken heeft de vlag al gezet
+      wisselVlag(Number(c.dataset.i));
+    });
+
+    document.getElementById('modus').addEventListener('click', e => {
+      vlagModus = !vlagModus;
+      e.currentTarget.textContent = vlagModus ? '🚩 Vlaggetje' : '⛏️ Graven';
+      e.currentTarget.classList.toggle('vlag', vlagModus);
+    });
+
+    document.getElementById('niveau-knoppen').addEventListener('click', e => {
+      const knop = e.target.closest('.niveau-knop');
+      if (!knop) return;
+      document.querySelectorAll('.niveau-knop').forEach(k => k.classList.remove('actief'));
+      knop.classList.add('actief');
+      niveau = knop.dataset.niveau;
+      nieuwSpel();
+    });
+    document.getElementById('opnieuw').addEventListener('click', nieuwSpel);
+    document.getElementById('popup-opnieuw').addEventListener('click', nieuwSpel);
+
+    nieuwSpel();
+  </script>
+</body>
+</html>

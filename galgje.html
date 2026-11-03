@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Galgje</title>
+  <link rel="icon" href="icons/galgje.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="stijl.css">
+  <script src="nav.js" defer></script>
+  <style>
+    .speelveld {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 10px 28px;
+      width: 100%;
+      max-width: 640px;
+      margin-bottom: 12px;
+    }
+
+    .galg {
+      width: min(190px, 46vw);
+      height: auto;
+      flex: none;
+    }
+    .galg .deel {
+      stroke: #e2e8f0;
+      stroke-width: 6;
+      stroke-linecap: round;
+      fill: none;
+      opacity: 0.08;   /* vaag zichtbaar, zodat je ziet wat er nog komt */
+      transition: opacity 0.3s;
+    }
+    .galg .deel.hout { stroke: #90cdf4; }
+    .galg .deel.zichtbaar { opacity: 1; }
+    .galg.dood .deel:not(.hout) { stroke: #fc8181; }
+
+    .rechts {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+      max-width: 100%;
+    }
+
+    .categorie {
+      font-size: 0.78rem;
+      color: #90cdf4;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .categorie b { color: #fff; }
+
+    .woord {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 6px;
+    }
+    .letter {
+      width: clamp(22px, 6vw, 32px);
+      height: clamp(32px, 8.5vw, 42px);
+      border-bottom: 3px solid rgba(144,205,244,0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: clamp(1.1rem, 4.8vw, 1.6rem);
+      font-weight: 800;
+      color: #fff;
+    }
+    .letter.open { animation: letter-in 0.25s cubic-bezier(0.34,1.56,0.64,1) both; }
+    .letter.gemist { color: #fc8181; }
+    .woord.goed .letter { color: #68d391; border-bottom-color: #68d391; }
+
+    @keyframes letter-in {
+      from { transform: translateY(-8px) scale(0.6); opacity: 0; }
+      to   { transform: none; opacity: 1; }
+    }
+
+    .fouten {
+      font-size: 0.8rem;
+      color: #90cdf4;
+    }
+    .fouten b { color: #fc8181; }
+
+    /* Schermtoetsenbord (QWERTY, zoals op je telefoon) */
+    .toetsenbord {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      width: 100%;
+      max-width: 520px;
+      margin-bottom: 14px;
+    }
+    .toets-rij {
+      display: flex;
+      gap: 5px;
+      justify-content: center;
+      width: 100%;
+    }
+    .toets {
+      flex: 0 1 44px;
+      min-width: 0;
+      height: 44px;
+      border: 1.5px solid rgba(99,179,237,0.3);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.07);
+      color: #e2e8f0;
+      font-size: 1rem;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, transform 0.1s;
+    }
+    .toets:not(:disabled):hover { background: rgba(99,179,237,0.18); border-color: #63b3ed; }
+    .toets:not(:disabled):active { transform: scale(0.92); }
+    .toets:disabled { cursor: default; }
+    .toets.goed { background: rgba(56,161,105,0.35); border-color: #38a169; color: #c6f6d5; }
+    .toets.fout { background: rgba(229,62,62,0.15); border-color: rgba(229,62,62,0.35); color: rgba(255,255,255,0.3); }
+  </style>
+</head>
+<body>
+
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-logo">🎮 <span>Spelletjes</span></a>
+      <a href="geheugen-spel.html" class="nav-tab">Geheugen spel</a>
+      <a href="vier-op-rij.html" class="nav-tab">Vier op een rij</a>
+      <a href="rots-papier-schaar.html" class="nav-tab">Rots-Papier-Schaar</a>
+      <a href="pixel-breakout.html" class="nav-tab">Pixel Breakout</a>
+      <a href="boter-kaas-en-eieren.html" class="nav-tab">Boter-kaas-en-eieren</a>
+      <a href="galgje.html" class="nav-tab actief">Galgje</a>
+      <a href="slang.html" class="nav-tab">Slang</a>
+      <a href="mijnenveger.html" class="nav-tab">Mijnenveger</a>
+    </div>
+  </nav>
+
+  <div class="pagina">
+    <h1 class="spel-titel">Galgje</h1>
+    <p class="spel-subtitel">Raad het woord voordat het poppetje aan de galg hangt!</p>
+
+    <div class="stats">
+      <div class="stat"><div class="stat-label">Gewonnen</div><div class="stat-value" id="gewonnen">0</div></div>
+      <div class="stat"><div class="stat-label">Verloren</div><div class="stat-value" id="verloren">0</div></div>
+      <div class="stat"><div class="stat-label">Reeks</div><div class="stat-value" id="reeks">0</div></div>
+    </div>
+
+    <div class="speelveld">
+      <svg class="galg" id="galg" viewBox="0 0 200 220" aria-hidden="true">
+        <line class="deel hout" x1="15"  y1="210" x2="125" y2="210"/>
+        <line class="deel hout" x1="45"  y1="210" x2="45"  y2="15"/>
+        <line class="deel hout" x1="45"  y1="15"  x2="140" y2="15"/>
+        <line class="deel hout" x1="140" y1="15"  x2="140" y2="45"/>
+        <circle class="deel" cx="140" cy="64" r="19"/>
+        <line class="deel" x1="140" y1="83"  x2="140" y2="140"/>
+        <line class="deel" x1="140" y1="100" x2="114" y2="126"/>
+        <line class="deel" x1="140" y1="100" x2="166" y2="126"/>
+        <line class="deel" x1="140" y1="140" x2="118" y2="182"/>
+        <line class="deel" x1="140" y1="140" x2="162" y2="182"/>
+      </svg>
+
+      <div class="rechts">
+        <div class="categorie">Categorie: <b id="categorie"></b></div>
+        <div class="woord" id="woord"></div>
+        <div class="fouten">Fouten: <b id="fouten">0</b> / <span id="max-fouten"></span></div>
+      </div>
+    </div>
+
+    <div class="toetsenbord" id="toetsenbord"></div>
+    <button class="knop" id="opnieuw">Nieuw woord</button>
+  </div>
+
+  <div class="overlay" id="overlay">
+    <div class="popup">
+      <span class="popup-emoji" id="popup-emoji"></span>
+      <div class="popup-titel" id="popup-titel"></div>
+      <div class="popup-tekst" id="popup-tekst"></div>
+      <button class="knop" id="popup-opnieuw">Volgend woord</button>
+    </div>
+  </div>
+
+  <script>
+    const WOORDEN = {
+      'Dieren': ['OLIFANT','GIRAF','PINGUIN','KROKODIL','VLINDER','EEKHOORN','SCHILDPAD','KANGOEROE',
+                 'DOLFIJN','ZEBRA','NIJLPAARD','NEUSHOORN','PAPEGAAI','EGEL','KONIJN','HAMSTER',
+                 'OCTOPUS','PAARD','LEEUW','TIJGER','KAMEEL','WALVIS','FLAMINGO','LIEVEHEERSBEESTJE'],
+      'Eten': ['PANNENKOEK','STROOPWAFEL','HAGELSLAG','BANAAN','AARDBEI','SPAGHETTI','BOERENKOOL',
+               'POFFERTJES','KAAS','CHOCOLADE','KOEKJE','PIZZA','AARDAPPEL','KOMKOMMER','WATERMELOEN',
+               'ANANAS','BROCCOLI','PINDAKAAS','TOMAAT','DROP','APPELTAART','HUTSPOT','OLIEBOL','BITTERBAL'],
+      'In huis': ['TELEVISIE','KOELKAST','STOFZUIGER','KUSSEN','SPIEGEL','BOEKENKAST','WASMACHINE',
+                  'TANDENBORSTEL','PARAPLU','SLEUTEL','GORDIJN','KLOK','THEEPOT','VORK','LEPEL','DEKBED',
+                  'HANDDOEK','KAPSTOK','VERWARMING','MAGNETRON','BROODROOSTER','PRULLENBAK','TRAPLEUNING','DEURMAT'],
+      'Natuur': ['REGENBOOG','ONWEER','BLIKSEM','SNEEUWPOP','VULKAAN','WATERVAL','WOESTIJN','ZONSONDERGANG',
+                 'RIVIER','DUINEN','TULP','ZONNEBLOEM','PADDENSTOEL','EIKENBOOM','HAGEL','STORM','MAAN',
+                 'KOMEET','OCEAAN','EILAND','MIST','IJSBERG','REGENWOUD','STERRENHEMEL'],
+      'Sport & spel': ['VOETBAL','SCHAATSEN','FIETSEN','ZWEMMEN','HOCKEY','TENNIS','KORFBAL','SCHAKEN',
+                       'DAMMEN','TRAMPOLINE','SKATEBOARD','KNIKKER','VLIEGER','SPRINGTOUW','VERSTOPPERTJE',
+                       'PUZZEL','DOBBELSTEEN','TOUWTREKKEN','HANDBAL','TURNEN','JUDO','ZEILEN','BADMINTON','KEGELEN'],
+    };
+    const RIJEN = ['QWERTYUIOP', 'ASDFGHJKL', 'ZXCVBNM'];
+    const DELEN = document.querySelectorAll('#galg .deel');
+    const MAX_FOUTEN = DELEN.length;   // 10
+
+    let woord, categorie, geraden, fouten, klaar;
+    let spelId = 0;
+    const stand = { gewonnen: 0, verloren: 0, reeks: 0 };
+    let zak = [];   // alle woorden in willekeurige volgorde: geen herhaling tot alles geweest is
+
+    function volgendWoord() {
+      if (!zak.length) {
+        zak = Object.entries(WOORDEN).flatMap(([cat, lijst]) => lijst.map(w => [cat, w]));
+        for (let i = zak.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [zak[i], zak[j]] = [zak[j], zak[i]];
+        }
+      }
+      return zak.pop();
+    }
+
+    /* ── Toetsenbord opbouwen ───────────── */
+    const toetsen = {};
+    const bordEl = document.getElementById('toetsenbord');
+    for (const rij of RIJEN) {
+      const rijEl = document.createElement('div');
+      rijEl.className = 'toets-rij';
+      for (const l of rij) {
+        const t = document.createElement('button');
+        t.className = 'toets';
+        t.textContent = l;
+        t.addEventListener('click', () => raad(l));
+        rijEl.appendChild(t);
+        toetsen[l] = t;
+      }
+      bordEl.appendChild(rijEl);
+    }
+
+    /* ── Weergave ───────────────────────── */
+    function tekenWoord(onthul = false) {
+      const el = document.getElementById('woord');
+      el.innerHTML = '';
+      for (const l of woord) {
+        const vak = document.createElement('div');
+        vak.className = 'letter';
+        if (geraden.has(l)) { vak.textContent = l; }
+        else if (onthul)   { vak.textContent = l; vak.classList.add('gemist'); }
+        el.appendChild(vak);
+      }
+    }
+
+    function tekenGalg() {
+      DELEN.forEach((d, i) => d.classList.toggle('zichtbaar', i < fouten));
+      document.getElementById('fouten').textContent = fouten;
+    }
+
+    function tekenStand() {
+      for (const k in stand) document.getElementById(k).textContent = stand[k];
+    }
+
+    /* ── Spelverloop ────────────────────── */
+    function raad(l) {
+      if (klaar || geraden.has(l)) return;
+      geraden.add(l);
+      const goed = woord.includes(l);
+      toetsen[l].classList.add(goed ? 'goed' : 'fout');
+      toetsen[l].disabled = true;
+
+      if (goed) {
+        tekenWoord();
+        // alleen de nieuw geopende letters laten opspringen
+        [...document.querySelectorAll('#woord .letter')].forEach((v, i) => {
+          if (woord[i] === l) v.classList.add('open');
+        });
+      } else {
+        fouten++;
+        tekenGalg();
+      }
+
+      const alles = [...woord].every(c => geraden.has(c));
+      if (alles) einde(true);
+      else if (fouten >= MAX_FOUTEN) einde(false);
+    }
+
+    function einde(gewonnen) {
+      klaar = true;
+      Object.values(toetsen).forEach(t => { t.disabled = true; });
+      if (gewonnen) {
+        stand.gewonnen++; stand.reeks++;
+        document.getElementById('woord').classList.add('goed');
+      } else {
+        stand.verloren++; stand.reeks = 0;
+        document.getElementById('galg').classList.add('dood');
+        tekenWoord(true);
+      }
+      tekenStand();
+
+      const id = spelId;
+      setTimeout(() => {
+        if (id !== spelId) return;
+        document.getElementById('popup-emoji').textContent = gewonnen ? '🏆' : '💀';
+        document.getElementById('popup-titel').textContent = gewonnen ? 'Geraden!' : 'Helaas!';
+        document.getElementById('popup-tekst').textContent = gewonnen
+          ? `Het woord was ${woord}. Je had ${fouten} ${fouten === 1 ? 'fout' : 'fouten'}.`
+          : `Het woord was ${woord}.`;
+        document.getElementById('overlay').classList.add('toon');
+      }, 900);
+    }
+
+    function nieuwSpel() {
+      spelId++;
+      [categorie, woord] = volgendWoord();
+      geraden = new Set();
+      fouten = 0;
+      klaar = false;
+      document.getElementById('categorie').textContent = categorie;
+      document.getElementById('max-fouten').textContent = MAX_FOUTEN;
+      document.getElementById('woord').classList.remove('goed');
+      document.getElementById('galg').classList.remove('dood');
+      document.getElementById('overlay').classList.remove('toon');
+      Object.values(toetsen).forEach(t => { t.disabled = false; t.className = 'toets'; });
+      tekenWoord();
+      tekenGalg();
+    }
+
+    /* ── Invoer ─────────────────────────── */
+    document.addEventListener('keydown', e => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (document.getElementById('overlay').classList.contains('toon')) {
+        if (e.key === 'Enter') nieuwSpel();
+        return;
+      }
+      const l = e.key.toUpperCase();
+      if (l.length === 1 && l >= 'A' && l <= 'Z') raad(l);
+    });
+    document.getElementById('opnieuw').addEventListener('click', nieuwSpel);
+    document.getElementById('popup-opnieuw').addEventListener('click', nieuwSpel);
+
+    tekenStand();
+    nieuwSpel();
+  </script>
+</body>
+</html>

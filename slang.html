@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Slang</title>
+  <link rel="icon" href="icons/slang.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="stijl.css">
+  <script src="nav.js" defer></script>
+  <style>
+    .veld-wrapper {
+      position: relative;
+      margin-bottom: 12px;
+    }
+
+    canvas {
+      display: block;
+      width: min(400px, 90vw, 52vh);
+      aspect-ratio: 1;
+      border-radius: 12px;
+      border: 2px solid rgba(99,179,237,0.3);
+      background: #0d1b2e;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      touch-action: none;   /* vegen stuurt de slang, niet de pagina */
+    }
+
+    .melding {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      text-align: center;
+      color: #fff;
+      font-weight: 800;
+      font-size: 1.3rem;
+      pointer-events: none;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.7);
+    }
+    .melding small {
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: #90cdf4;
+    }
+    .melding.verborgen { display: none; }
+
+    /* Pijlknoppen voor telefoon/tablet */
+    .pijlen {
+      display: none;
+      grid-template-columns: repeat(3, 58px);
+      grid-template-rows: repeat(2, 52px);
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    @media (pointer: coarse) {
+      .pijlen { display: grid; grid-template-rows: repeat(2, 46px); }
+      /* iets kleiner veld, zodat de pijlknoppen er zonder scrollen onder passen */
+      canvas { width: min(400px, 90vw, 42vh); }
+    }
+    .pijl {
+      border: 1.5px solid rgba(99,179,237,0.3);
+      border-radius: 12px;
+      background: rgba(255,255,255,0.07);
+      color: #e2e8f0;
+      font-size: 1.3rem;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .pijl:active { background: rgba(99,179,237,0.25); }
+    .pijl.op     { grid-column: 2; grid-row: 1; }
+    .pijl.links  { grid-column: 1; grid-row: 2; }
+    .pijl.neer   { grid-column: 2; grid-row: 2; }
+    .pijl.rechts { grid-column: 3; grid-row: 2; }
+
+    .uitleg {
+      font-size: 0.75rem;
+      color: rgba(144,205,244,0.7);
+      text-align: center;
+      margin-bottom: 10px;
+    }
+    .uitleg .aanraak { display: none; }
+    @media (pointer: coarse) {
+      .uitleg .toetsen { display: none; }
+      .uitleg .aanraak { display: inline; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-logo">🎮 <span>Spelletjes</span></a>
+      <a href="geheugen-spel.html" class="nav-tab">Geheugen spel</a>
+      <a href="vier-op-rij.html" class="nav-tab">Vier op een rij</a>
+      <a href="rots-papier-schaar.html" class="nav-tab">Rots-Papier-Schaar</a>
+      <a href="pixel-breakout.html" class="nav-tab">Pixel Breakout</a>
+      <a href="boter-kaas-en-eieren.html" class="nav-tab">Boter-kaas-en-eieren</a>
+      <a href="galgje.html" class="nav-tab">Galgje</a>
+      <a href="slang.html" class="nav-tab actief">Slang</a>
+      <a href="mijnenveger.html" class="nav-tab">Mijnenveger</a>
+    </div>
+  </nav>
+
+  <div class="pagina">
+    <h1 class="spel-titel">Slang</h1>
+    <p class="spel-subtitel">Eet de appels en word zo lang mogelijk. Raak de muur of jezelf niet!</p>
+
+    <div class="niveau-knoppen" id="niveau-knoppen">
+      <button class="niveau-knop" data-niveau="rustig">🐢 Rustig</button>
+      <button class="niveau-knop actief" data-niveau="normaal">🐍 Normaal</button>
+      <button class="niveau-knop" data-niveau="snel">⚡ Snel</button>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="stat-label">Score</div><div class="stat-value" id="score">0</div></div>
+      <div class="stat"><div class="stat-label">Record</div><div class="stat-value" id="record">0</div></div>
+    </div>
+
+    <div class="veld-wrapper">
+      <canvas id="veld"></canvas>
+      <div class="melding" id="melding"></div>
+    </div>
+
+    <div class="pijlen" id="pijlen">
+      <button class="pijl op"     data-richting="op"     aria-label="Omhoog">▲</button>
+      <button class="pijl links"  data-richting="links"  aria-label="Links">◀</button>
+      <button class="pijl neer"   data-richting="neer"   aria-label="Omlaag">▼</button>
+      <button class="pijl rechts" data-richting="rechts" aria-label="Rechts">▶</button>
+    </div>
+
+    <p class="uitleg">
+      <span class="toetsen">Pijltjes of WASD = sturen · spatie of P = pauze</span>
+      <span class="aanraak">Veeg over het veld of gebruik de pijlen · tik op het veld = pauze</span>
+    </p>
+  </div>
+
+  <div class="overlay" id="overlay">
+    <div class="popup">
+      <span class="popup-emoji" id="popup-emoji">🐍</span>
+      <div class="popup-titel">Game over</div>
+      <div class="popup-tekst" id="popup-tekst"></div>
+      <button class="knop" id="popup-opnieuw">Nog een keer!</button>
+    </div>
+  </div>
+
+  <script>
+    const N = 18;                                            // 18 × 18 vakjes
+    const TEMPO = { rustig: 170, normaal: 115, snel: 75 };   // ms per stap
+    const RICHTING = {
+      op: [0, -1], neer: [0, 1], links: [-1, 0], rechts: [1, 0],
+    };
+    const TEGENOVER = { op: 'neer', neer: 'op', links: 'rechts', rechts: 'links' };
+
+    const cv = document.getElementById('veld');
+    const ctx = cv.getContext('2d');
+
+    let niveau = 'normaal';
+    let slang, richting, wachtrij, eten, score, toestand;   // toestand: klaar | spelen | pauze | over
+    let acc = 0, vorige = 0;
+
+    /* ── Record per niveau (alleen in deze browser) ── */
+    function leesRecord() {
+      try { return Number(localStorage.getItem('slang-record-' + niveau)) || 0; } catch (e) { return 0; }
+    }
+    function bewaarRecord(s) {
+      try { localStorage.setItem('slang-record-' + niveau, String(s)); } catch (e) {}
+    }
+
+    /* ── Canvas scherp houden bij elk formaat ── */
+    function maatAanpassen() {
+      const r = cv.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      cv.width = Math.round(r.width * dpr);
+      cv.height = Math.round(r.height * dpr);
+      teken();
+    }
+    window.addEventListener('resize', maatAanpassen);
+
+    /* ── Spelstaat ──────────────────────── */
+    function nieuwSpel() {
+      const m = Math.floor(N / 2);
+      slang = [[m, m], [m - 1, m], [m - 2, m]];
+      richting = 'rechts';
+      wachtrij = [];
+      score = 0;
+      toestand = 'klaar';
+      plaatsEten();
+      document.getElementById('score').textContent = '0';
+      document.getElementById('record').textContent = leesRecord();
+      document.getElementById('overlay').classList.remove('toon');
+      toonMelding('Klaar?', aanraak() ? 'Veeg of tik op een pijl om te starten' : 'Druk op een pijltje om te starten');
+      teken();
+    }
+
+    function plaatsEten() {
+      const vrij = [];
+      for (let x = 0; x < N; x++)
+        for (let y = 0; y < N; y++)
+          if (!slang.some(([sx, sy]) => sx === x && sy === y)) vrij.push([x, y]);
+      eten = vrij.length ? vrij[Math.floor(Math.random() * vrij.length)] : null;
+    }
+
+    function stuur(r) {
+      if (toestand === 'over') return;
+      if (toestand === 'klaar' || toestand === 'pauze') {
+        // de eerste richting mag niet terug de slang in
+        if (toestand === 'klaar' && r === TEGENOVER[richting]) r = richting;
+        toestand = 'spelen';
+        toonMelding(null);
+      }
+      // een wachtrij van max. 2 zetten: snel "op, links" werkt, maar omkeren kan niet
+      const laatste = wachtrij.length ? wachtrij[wachtrij.length - 1] : richting;
+      if (r !== laatste && r !== TEGENOVER[laatste] && wachtrij.length < 2) wachtrij.push(r);
+    }
+
+    function pauze() {
+      if (toestand === 'spelen') { toestand = 'pauze'; toonMelding('Pauze', 'Stuur of druk op spatie om verder te gaan'); }
+      else if (toestand === 'pauze') { toestand = 'spelen'; toonMelding(null); }
+    }
+
+    function stap() {
+      if (wachtrij.length) richting = wachtrij.shift();
+      const [dx, dy] = RICHTING[richting];
+      const kop = [slang[0][0] + dx, slang[0][1] + dy];
+
+      const eet = eten && kop[0] === eten[0] && kop[1] === eten[1];
+      // de staart schuift deze stap op (tenzij hij eet), dus dat vakje telt niet als botsing
+      const lijf = eet ? slang : slang.slice(0, -1);
+      const muur = kop[0] < 0 || kop[0] >= N || kop[1] < 0 || kop[1] >= N;
+      if (muur || lijf.some(([x, y]) => x === kop[0] && y === kop[1])) return gameOver();
+
+      slang.unshift(kop);
+      if (eet) {
+        score++;
+        document.getElementById('score').textContent = score;
+        plaatsEten();
+        if (!eten) return gameOver(true);   // het hele veld is vol: gewonnen!
+      } else {
+        slang.pop();
+      }
+    }
+
+    function gameOver(vol = false) {
+      toestand = 'over';
+      const record = leesRecord();
+      const nieuwRecord = score > record;
+      if (nieuwRecord) { bewaarRecord(score); document.getElementById('record').textContent = score; }
+      teken();
+      setTimeout(() => {
+        if (toestand !== 'over') return;   // intussen al opnieuw begonnen
+        document.getElementById('popup-emoji').textContent = vol ? '🏆' : nieuwRecord ? '🎉' : '🐍';
+        document.getElementById('popup-tekst').textContent =
+          (vol ? 'Het hele veld is vol, ongelooflijk! ' : '') +
+          `Je at ${score} ${score === 1 ? 'appel' : 'appels'}.` +
+          (nieuwRecord && score > 0 ? ' Nieuw record!' : ` Record: ${Math.max(record, score)}.`);
+        document.getElementById('overlay').classList.add('toon');
+      }, 500);
+    }
+
+    /* ── Tekenen ────────────────────────── */
+    function teken() {
+      if (!slang) return;
+      const w = cv.width, c = w / N;
+      ctx.clearRect(0, 0, w, w);
+
+      // dambordpatroon
+      ctx.fillStyle = 'rgba(255,255,255,0.025)';
+      for (let x = 0; x < N; x++)
+        for (let y = 0; y < N; y++)
+          if ((x + y) % 2) ctx.fillRect(x * c, y * c, c, c);
+
+      // appel
+      if (eten) {
+        ctx.font = `${c * 0.85}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🍎', eten[0] * c + c / 2, eten[1] * c + c / 2 + c * 0.05);
+      }
+
+      // slang: van staart naar kop, kleur loopt van donker naar licht groen
+      const dood = toestand === 'over';
+      for (let i = slang.length - 1; i >= 0; i--) {
+        const [x, y] = slang[i];
+        const t = slang.length > 1 ? i / (slang.length - 1) : 0;
+        ctx.fillStyle = dood ? `hsl(0, 70%, ${60 - t * 22}%)` : `hsl(${145 - t * 20}, 65%, ${58 - t * 24}%)`;
+        const m = c * 0.08;
+        rondRect(x * c + m, y * c + m, c - 2 * m, c - 2 * m, c * (i === 0 ? 0.38 : 0.26));
+      }
+
+      // oogjes op de kop, in de looprichting
+      const [kx, ky] = slang[0];
+      const [dx, dy] = RICHTING[richting];
+      const mx = kx * c + c / 2, my = ky * c + c / 2;
+      for (const z of [-1, 1]) {
+        const ox = mx + dx * c * 0.16 + dy * z * c * 0.2;
+        const oy = my + dy * c * 0.16 - dx * z * c * 0.2;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(ox, oy, c * 0.12, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#0d1b2e';
+        ctx.beginPath(); ctx.arc(ox + dx * c * 0.04, oy + dy * c * 0.04, c * 0.06, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+
+    function rondRect(x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.fill();
+    }
+
+    function toonMelding(titel, sub = '') {
+      const el = document.getElementById('melding');
+      if (!titel) { el.classList.add('verborgen'); return; }
+      el.innerHTML = '';
+      el.append(titel);
+      if (sub) { const s = document.createElement('small'); s.textContent = sub; el.append(s); }
+      el.classList.remove('verborgen');
+    }
+
+    const aanraak = () => window.matchMedia('(pointer: coarse)').matches;
+
+    /* ── Lus ────────────────────────────── */
+    function lus(nu) {
+      const dt = Math.min(250, nu - vorige);   // na een tab-wissel niet inhalen
+      vorige = nu;
+      if (toestand === 'spelen') {
+        acc += dt;
+        while (acc >= TEMPO[niveau] && toestand === 'spelen') { acc -= TEMPO[niveau]; stap(); }
+      } else acc = 0;
+      teken();
+      requestAnimationFrame(lus);
+    }
+
+    /* ── Invoer ─────────────────────────── */
+    const TOETS = {
+      ArrowUp: 'op', ArrowDown: 'neer', ArrowLeft: 'links', ArrowRight: 'rechts',
+      w: 'op', s: 'neer', a: 'links', d: 'rechts', W: 'op', S: 'neer', A: 'links', D: 'rechts',
+    };
+    document.addEventListener('keydown', e => {
+      if (document.getElementById('overlay').classList.contains('toon')) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); nieuwSpel(); }
+        return;
+      }
+      if (TOETS[e.key]) { e.preventDefault(); stuur(TOETS[e.key]); }
+      else if (e.key === ' ' || e.key === 'p' || e.key === 'P') { e.preventDefault(); pauze(); }
+    });
+
+    // vegen over het veld; een korte tik pauzeert
+    let veegStart = null;
+    cv.addEventListener('pointerdown', e => { veegStart = [e.clientX, e.clientY]; });
+    cv.addEventListener('pointerup', e => {
+      if (!veegStart) return;
+      const dx = e.clientX - veegStart[0], dy = e.clientY - veegStart[1];
+      veegStart = null;
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < 20) { pauze(); return; }
+      stuur(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'rechts' : 'links') : (dy > 0 ? 'neer' : 'op'));
+    });
+    cv.addEventListener('pointercancel', () => { veegStart = null; });
+
+    document.getElementById('pijlen').addEventListener('pointerdown', e => {
+      const knop = e.target.closest('.pijl');
+      if (!knop) return;
+      e.preventDefault();
+      stuur(knop.dataset.richting);
+    });
+
+    document.getElementById('niveau-knoppen').addEventListener('click', e => {
+      const knop = e.target.closest('.niveau-knop');
+      if (!knop) return;
+      document.querySelectorAll('.niveau-knop').forEach(k => k.classList.remove('actief'));
+      knop.classList.add('actief');
+      niveau = knop.dataset.niveau;
+      knop.blur();   // anders "klikt" spatie deze knop opnieuw
+      nieuwSpel();
+    });
+    document.getElementById('popup-opnieuw').addEventListener('click', nieuwSpel);
+
+    // automatisch pauzeren als je van tabblad of app wisselt
+    document.addEventListener('visibilitychange', () => { if (document.hidden && toestand === 'spelen') pauze(); });
+
+    nieuwSpel();
+    maatAanpassen();
+    requestAnimationFrame(t => { vorige = t; requestAnimationFrame(lus); });
+  </script>
+</body>
+</html>
