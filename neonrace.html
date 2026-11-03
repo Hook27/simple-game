@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Neonrace 3D</title>
+  <link rel="icon" href="icons/neonrace.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="stijl.css">
+  <link rel="stylesheet" href="arcade.css">
+  <script src="nav.js" defer></script>
+  <script src="arcade.js"></script>
+  <style>
+    #spel { width: 100%; height: 100%; overflow: hidden; border-radius: 10px; }
+    body[data-toestand="spelen"] #spel { cursor: none; }
+    body[data-toestand="menu"] .hud, body[data-toestand="laden"] .hud { display: none; }
+    .hud { position: absolute; inset: 0; pointer-events: none; font-family: "Segoe UI", system-ui, sans-serif; color: #fdf4ff; }
+    .hud .label { font-size: 0.62rem; letter-spacing: 1.4px; color: rgba(244,171,252,0.85); font-weight: 700; }
+    .hud .groot { font-size: 1.35rem; font-weight: 900; text-shadow: 0 0 12px rgba(232,121,249,0.7); }
+    #hudLinks { position: absolute; top: 12px; left: 14px; }
+    #hudRechts { position: absolute; top: 12px; right: 14px; text-align: right; }
+    #hudRechts .groot { color: #fde047; text-shadow: 0 0 12px rgba(253,224,71,0.6); }
+    #levens { margin-top: 6px; font-size: 1rem; letter-spacing: 3px; color: #f472b6; text-shadow: 0 0 8px #f472b6; }
+    #snelheidPaneel { position: absolute; right: 18px; bottom: 16px; text-align: right; }
+    #snelheid { font-size: 2.6rem; font-weight: 900; line-height: 1; font-style: italic; color: #67e8f9; text-shadow: 0 0 16px #22d3ee, 0 0 34px #0891b2; }
+    #snelheidPaneel .label { color: rgba(103,232,249,0.9); }
+    #nitroPaneel { position: absolute; left: 14px; bottom: 16px; width: min(240px, 42%); }
+    .balk { height: 9px; border-radius: 5px; background: rgba(255,255,255,0.1); overflow: hidden; margin-top: 4px; }
+    #nitroBalk { height: 100%; width: 0; border-radius: 5px; background: linear-gradient(90deg, #a855f7, #f472b6, #fde047); box-shadow: 0 0 12px #f472b6; transition: width 0.1s; }
+    #melding { position: absolute; left: 0; right: 0; top: 30%; text-align: center; font-size: clamp(1.2rem, 4vw, 2rem); font-weight: 900; font-style: italic; opacity: 0; transition: opacity 0.25s, transform 0.25s; transform: scale(0.9); }
+    #melding.toon { opacity: 1; transform: scale(1); }
+    #banner { position: absolute; left: 0; right: 0; top: 18%; text-align: center; opacity: 0; transition: opacity 0.4s; }
+    #banner .titel { font-size: clamp(1.8rem, 6vw, 3.2rem); font-weight: 900; font-style: italic; letter-spacing: 2px; }
+    #flits { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+
+    .scherm { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; pointer-events: auto; background: radial-gradient(ellipse at center, rgba(20,4,40,0.2), rgba(20,4,40,0.7)); }
+    body[data-toestand="menu"]  #menu  { display: flex; }
+    body[data-toestand="pauze"] #pauzeScherm { display: flex; }
+    body[data-toestand="over"]  #overScherm { display: flex; }
+    .scherm h1 { font-size: clamp(2.6rem, 10vw, 5.4rem); font-weight: 900; font-style: italic; line-height: 0.95; letter-spacing: 3px; color: #fdf4ff;
+                 text-shadow: 0 0 14px #f0abfc, 0 0 34px #d946ef, 0 0 70px #a21caf; }
+    .scherm h1 span { display: block; font-size: 0.4em; letter-spacing: 12px; color: #cffafe; text-shadow: 0 0 14px #22d3ee, 0 0 32px #0891b2; margin-top: 10px; }
+    .scherm p { color: rgba(250,232,255,0.9); font-size: 0.9rem; line-height: 1.6; margin-top: 14px; max-width: 470px; }
+    .scherm .knop { margin-top: 22px; font-size: 1rem; padding: 12px 34px; background: linear-gradient(135deg, #d946ef, #7c3aed); box-shadow: 0 4px 20px rgba(217,70,239,0.5); }
+    .scherm .klein { font-size: 0.75rem; color: rgba(244,171,252,0.8); }
+    .stats { margin-top: 16px; display: grid; grid-template-columns: auto auto; gap: 6px 30px; font-size: 0.92rem; }
+    .stats div:nth-child(odd) { text-align: left; color: rgba(250,232,255,0.8); }
+    .stats div:nth-child(even) { text-align: right; font-weight: 800; }
+    #nieuwRecord { color: #fde047; font-weight: 900; font-size: 1.2rem; margin-top: 8px; text-shadow: 0 0 14px rgba(253,224,71,0.7); }
+    #geenWebgl { display: none; }
+
+    #pauzeKnop { top: 12px; right: 12px; bottom: auto; width: 46px; height: 46px; font-size: 1rem; }
+    #nitroKnop { right: 12px; bottom: 96px; width: 74px; height: 74px; font-size: 0.85rem; font-weight: 900; border-radius: 50%; }
+    #nitroKnop.aan { background: rgba(217,70,239,0.5); border-color: #f0abfc; }
+    @media (pointer: coarse) { #hudRechts { top: 66px; } #snelheid { font-size: 2rem; } }
+  </style>
+  <script type="importmap">{ "imports": { "three": "./lib/three/three.module.min.js" } }</script>
+</head>
+<body data-toestand="laden">
+
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-logo">🎮 <span>Spelletjes</span></a>
+      <a href="geheugen-spel.html" class="nav-tab">Geheugen spel</a>
+      <a href="vier-op-rij.html" class="nav-tab">Vier op een rij</a>
+      <a href="rots-papier-schaar.html" class="nav-tab">Rots-Papier-Schaar</a>
+      <a href="pixel-breakout.html" class="nav-tab">Pixel Breakout</a>
+      <a href="boter-kaas-en-eieren.html" class="nav-tab">Boter-kaas-en-eieren</a>
+      <a href="galgje.html" class="nav-tab">Galgje</a>
+      <a href="slang.html" class="nav-tab">Slang</a>
+      <a href="mijnenveger.html" class="nav-tab">Mijnenveger</a>
+      <a href="neon-sterrenjager.html" class="nav-tab">Sterrenjager</a>
+      <a href="planeetverdediger.html" class="nav-tab">Planeetverdediger</a>
+      <a href="neontunnel.html" class="nav-tab">Neontunnel</a>
+      <a href="sterrensprong.html" class="nav-tab">Sterrensprong</a>
+      <a href="sterrenstorm.html" class="nav-tab">Sterrenstorm 3D</a>
+      <a href="neonrace.html" class="nav-tab actief">Neonrace 3D</a>
+    </div>
+  </nav>
+
+  <div id="wrap">
+    <div id="spel">
+      <canvas id="cv"></canvas>
+      <div class="hud">
+        <div id="hudLinks"><div class="label">SCORE</div><div class="groot" id="score">0</div><div id="levens"></div></div>
+        <div id="hudRechts"><div class="label">RECORD</div><div class="groot" id="record">0</div><div class="label" id="afstand" style="margin-top:6px">0 m</div></div>
+        <div id="nitroPaneel"><div class="label">NITRO</div><div class="balk"><div id="nitroBalk"></div></div></div>
+        <div id="snelheidPaneel"><div id="snelheid">0</div><div class="label">KM/U</div></div>
+        <div id="melding"></div>
+        <div id="banner"><div class="titel" id="bannerTitel"></div></div>
+        <div id="flits"></div>
+      </div>
+
+      <div class="scherm" id="menu">
+        <h1>NEONRACE<span>3D</span></h1>
+        <p>Race over de neon-snelweg richting de ondergaande zon. Haal het verkeer in, spring over schansen, pak nitro en ga steeds harder.</p>
+        <p class="klein" id="menuBesturing"></p>
+        <button class="knop" id="startKnop" type="button">▶ Start</button>
+        <p class="klein" id="menuRecord"></p>
+        <p id="geenWebgl">Je browser ondersteunt geen WebGL, dus dit 3D-spel kan hier helaas niet draaien.</p>
+      </div>
+      <div class="scherm" id="pauzeScherm">
+        <h1 style="font-size:3rem">PAUZE</h1>
+        <button class="knop" id="hervatKnop" type="button">▶ Verder</button>
+        <p class="klein">P of Esc = pauze · M = geluid</p>
+      </div>
+      <div class="scherm" id="overScherm">
+        <h1 style="font-size:clamp(2.2rem,8vw,4rem)">TOTAL LOSS</h1>
+        <div id="nieuwRecord"></div>
+        <div class="stats" id="eindStats"></div>
+        <button class="knop" id="opnieuwKnop" type="button">↻ Opnieuw</button>
+      </div>
+
+      <button class="aanraak-knop" id="pauzeKnop" type="button" aria-label="Pauze">⏸</button>
+      <button class="aanraak-knop" id="nitroKnop" type="button" aria-label="Nitro">NITRO</button>
+    </div>
+  </div>
+
+  <div class="onderbalk">
+    <button class="geluid-knop" id="geluidKnop" type="button">🔊 Geluid</button>
+    <span class="toetsen">Muis of pijltjes/A-D = sturen · spatie of ↑ ingedrukt = nitro · P = pauze · M = geluid</span>
+    <span class="aanraak">Sleep naar links en rechts om te sturen · houd NITRO vast voor extra snelheid</span>
+  </div>
+
+  <script type="module">
+  import * as THREE from 'three';
+  import { EffectComposer } from './lib/three/postprocessing/EffectComposer.js';
+  import { RenderPass } from './lib/three/postprocessing/RenderPass.js';
+  import { UnrealBloomPass } from './lib/three/postprocessing/UnrealBloomPass.js';
+  import { OutputPass } from './lib/three/postprocessing/OutputPass.js';
+
+  const $ = id => document.getElementById(id);
+  const spelEl = $('spel'), cv = $('cv');
+  const geluid = Arcade.maakGeluid('race-geluid', $('geluidKnop'));
+  const recordOpslag = Arcade.record('race-record');
+  const aanraak = Arcade.aanraak();
+  const getal = Arcade.getal, willekeurig = Arcade.willekeurig;
+
+  /* ════════════════════════════════════════════════════════════
+     Renderer, camera, licht en bloom
+     De weg ligt langs de z-as; de auto staat op z = 0 en de wereld
+     schuift naar je toe. 1 eenheid = 0,5 meter.
+  ════════════════════════════════════════════════════════════ */
+  let renderer;
+  try { renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: false, powerPreference: 'high-performance' }); }
+  catch (e) { $('geenWebgl').style.display = 'block'; $('startKnop').style.display = 'none'; document.body.dataset.toestand = 'menu'; throw e; }
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  let pixelRatio = Math.min(window.devicePixelRatio || 1, aanraak ? 1.5 : 2);
+  renderer.setPixelRatio(pixelRatio);
+
+  const HORIZON = new THREE.Color(0x2a0838);
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.Fog(HORIZON, 140, 760);
+  const camera = new THREE.PerspectiveCamera(68, 1, 0.1, 2000);
+  scene.add(new THREE.HemisphereLight(0x9f7aea, 0x1a0430, 1.2));
+  const zonLicht = new THREE.DirectionalLight(0xff8fd0, 1.6);
+  zonLicht.position.set(0, 6, -20);
+  scene.add(zonLicht);
+
+  const composer = new EffectComposer(renderer);
+  composer.addPass(new RenderPass(scene, camera));
+  const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 1.0, 0.5, 0.8);
+  composer.addPass(bloom);
+  composer.addPass(new OutputPass());
+
+  function maatAanpassen() {
+    const w = spelEl.clientWidth, h = spelEl.clientHeight;
+    if (!w || !h) return;
+    renderer.setPixelRatio(pixelRatio); renderer.setSize(w, h, false);
+    composer.setPixelRatio(pixelRatio); composer.setSize(w, h);
+    camera.aspect = w / h; camera.updateProjectionMatrix();
+    deeltjesMat.uniforms.uSchaal.value = renderer.domElement.height / 900;
+  }
+  window.addEventListener('resize', maatAanpassen);
+  if (window.ResizeObserver) new ResizeObserver(maatAanpassen).observe(spelEl);
+
+  const neonKleur = (hex, sterkte = 2.4) => new THREE.Color(hex).multiplyScalar(sterkte);
+
+  /* ════════════════════════════════════════════════════════════
+     Decor: lucht, retro-zon, bergen, weg, raster, palmen
+  ════════════════════════════════════════════════════════════ */
+  // lucht: verloop van diep blauw bovenin naar gloeiend roze bij de horizon
+  const lucht = new THREE.Mesh(new THREE.SphereGeometry(1500, 32, 16), new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false, fog: false,
+    vertexShader: 'varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+    fragmentShader: `varying vec3 vP;
+      void main(){ float h = normalize(vP).y;
+        vec3 boven = vec3(0.02, 0.01, 0.08), midden = vec3(0.18, 0.03, 0.30), horizon = vec3(0.95, 0.22, 0.55);
+        vec3 k = mix(horizon, midden, smoothstep(0.0, 0.18, h)); k = mix(k, boven, smoothstep(0.18, 0.6, h));
+        if (h < 0.0) k = vec3(0.16, 0.03, 0.22);
+        gl_FragColor = vec4(k, 1.0); }`,
+  }));
+  scene.add(lucht);
+
+  // sterren bovenin
+  const sterGeo = new THREE.BufferGeometry();
+  const sterPos = new Float32Array(900 * 3);
+  for (let i = 0; i < 900; i++) {
+    const a = Math.random() * Math.PI - Math.PI, h = 0.12 + Math.random() * 0.9;
+    sterPos.set([Math.cos(a) * 1300, h * 900, Math.sin(a) * 1300 - 200], i * 3);
+  }
+  sterGeo.setAttribute('position', new THREE.BufferAttribute(sterPos, 3));
+  scene.add(new THREE.Points(sterGeo, new THREE.PointsMaterial({ color: 0xffe4f6, size: 2.2, sizeAttenuation: false, transparent: true, opacity: 0.8, fog: false, depthWrite: false })));
+
+  // de grote gestreepte zon
+  const zon = new THREE.Mesh(new THREE.CircleGeometry(230, 64), new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, fog: false,
+    uniforms: { uTijd: { value: 0 } },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+    fragmentShader: `varying vec2 vUv; uniform float uTijd;
+      void main(){
+        vec3 boven = vec3(1.25, 0.95, 0.2), onder = vec3(1.15, 0.1, 0.45);
+        vec3 k = mix(onder, boven, smoothstep(0.15, 0.95, vUv.y));
+        // horizontale banden die naar onderen breder worden en langzaam omlaag schuiven
+        float y = vUv.y;
+        float band = fract(y * 14.0 + uTijd * 0.25);
+        float dikte = smoothstep(0.55, 0.0, y) * 0.55;
+        if (y < 0.55 && band < dikte) discard;
+        gl_FragColor = vec4(k, 1.0); }`,
+  }));
+  zon.position.set(0, 205, -1180);   // hoog genoeg dat de strepen boven de horizon zichtbaar zijn
+  scene.add(zon);
+  const zonGloedTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d');
+    const gr = g.createRadialGradient(128, 128, 0, 128, 128, 128); gr.addColorStop(0, 'rgba(255,90,180,0.38)'); gr.addColorStop(0.45, 'rgba(255,50,150,0.14)'); gr.addColorStop(1, 'rgba(255,40,140,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, 256, 256); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+  const zonGloed = new THREE.Sprite(new THREE.SpriteMaterial({ map: zonGloedTex, transparent: true, depthWrite: false, fog: false, blending: THREE.AdditiveBlending }));
+  zonGloed.scale.set(900, 900, 1); zonGloed.position.set(0, 195, -1200);
+  scene.add(zonGloed);
+
+  // bergen in draadmodel aan de horizon, met een dal waar de weg doorheen loopt
+  const bergGeo = new THREE.PlaneGeometry(2200, 520, 88, 26);
+  bergGeo.rotateX(-Math.PI / 2);
+  { const p = bergGeo.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i), z = p.getZ(i);
+      const dal = Math.min(1, Math.max(0, (Math.abs(x) - 70) / 260));
+      const h = (Math.sin(x * 0.011) * 0.5 + Math.sin(x * 0.027 + z * 0.02) * 0.35 + Math.sin(x * 0.06 + z * 0.05) * 0.15 + 0.6) * 170 * dal * (0.5 + (z + 260) / 520 * 0.7);
+      p.setY(i, Math.max(0, h + (Math.random() - 0.5) * 8 * dal));
+    }
+    bergGeo.computeVertexNormals(); }
+  const bergen = new THREE.Group();
+  bergen.add(new THREE.Mesh(bergGeo, new THREE.MeshBasicMaterial({ color: 0x12031f, fog: true })));
+  bergen.add(new THREE.LineSegments(new THREE.WireframeGeometry(bergGeo), new THREE.LineBasicMaterial({ color: neonKleur(0xd946ef, 1.6), fog: true, transparent: true, opacity: 0.75 })));
+  bergen.position.set(0, -1, -900);
+  scene.add(bergen);
+
+  // de weg: een shader tekent rijstroken, randen en dwarslijnen die met de afstand meeschuiven
+  const WEG_L = 1600, WEG_B = 22;
+  const wegMat = new THREE.ShaderMaterial({
+    uniforms: { uAfstand: { value: 0 }, uHorizon: { value: HORIZON } },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+    fragmentShader: `varying vec2 vUv; uniform float uAfstand; uniform vec3 uHorizon;
+      float lijn(float v, float breedte){ return smoothstep(breedte, 0.0, abs(v)); }
+      void main(){
+        float x = (vUv.x - 0.5) * ${WEG_B.toFixed(1)};
+        float d = vUv.y * ${WEG_L.toFixed(1)} - 24.0;            // afstand voor de auto
+        float s = d + uAfstand;                                  // vaste plek op de weg
+        vec3 k = vec3(0.025, 0.0, 0.06);
+        float rand = lijn(abs(x) - 10.0, 0.18);
+        float strook = 0.0;
+        for (int i = -1; i <= 1; i += 2) { strook += lijn(x - float(i) * 2.0, 0.09) + lijn(x - float(i) * 6.0, 0.09); }
+        strook *= step(fract(s / 7.0), 0.5);
+        float dwars = lijn(fract(s / 12.0) - 0.5, 0.012) * 0.6;
+        k += vec3(0.4, 2.6, 3.0) * rand + vec3(2.6, 0.6, 2.2) * strook + vec3(0.6, 0.1, 0.9) * dwars;
+        float mist = 1.0 - exp(-max(d, 0.0) * 0.0035);
+        gl_FragColor = vec4(mix(k, uHorizon, mist), 1.0); }`,
+  });
+  const weg = new THREE.Mesh(new THREE.PlaneGeometry(WEG_B, WEG_L), wegMat);
+  weg.rotation.x = -Math.PI / 2;
+  weg.position.set(0, 0, -WEG_L / 2 + 24);
+  scene.add(weg);
+
+  // gloeiend raster naast de weg
+  const rasterMat = new THREE.ShaderMaterial({
+    uniforms: { uAfstand: { value: 0 }, uHorizon: { value: HORIZON } },
+    vertexShader: 'varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
+    fragmentShader: `varying vec3 vW; uniform float uAfstand; uniform vec3 uHorizon;
+      void main(){
+        float s = -vW.z + uAfstand;
+        vec2 r = abs(fract(vec2(vW.x / 10.0, s / 10.0)) - 0.5);
+        float l = smoothstep(0.035, 0.0, min(0.5 - r.x, 0.5 - r.y) );
+        vec3 k = vec3(0.05, 0.0, 0.08) + vec3(2.2, 0.3, 2.4) * l * 0.8;
+        float d = max(0.0, -vW.z);
+        float mist = 1.0 - exp(-d * 0.0042);
+        gl_FragColor = vec4(mix(k, uHorizon, mist), 1.0); }`,
+  });
+  const raster = new THREE.Mesh(new THREE.PlaneGeometry(1400, WEG_L), rasterMat);
+  raster.rotation.x = -Math.PI / 2;
+  raster.position.set(0, -0.05, -WEG_L / 2 + 24);
+  scene.add(raster);
+
+  /* ── Modellen met neon-randen ── */
+  const randCache = new Map();
+  function neonDeel(geo, kleur, { vul = 0x0b0716, sterkte = 2.4, metaal = 0.6 } = {}) {
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: vul, metalness: metaal, roughness: 0.35, emissive: kleur, emissiveIntensity: 0.05, flatShading: true })));
+    let rand = randCache.get(geo);
+    if (!rand) { rand = new THREE.EdgesGeometry(geo, 25); randCache.set(geo, rand); }
+    g.add(new THREE.LineSegments(rand, new THREE.LineBasicMaterial({ color: neonKleur(kleur, sterkte), toneMapped: false })));
+    return g;
+  }
+  const gloeiTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+    const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.3, 'rgba(255,255,255,0.5)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, 128, 128); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+  function gloed(kleur, grootte, sterkte = 1.6) {
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: gloeiTex, color: neonKleur(kleur, sterkte), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, toneMapped: false }));
+    s.scale.setScalar(grootte);
+    return s;
+  }
+
+  const GEO = {
+    romp: new THREE.BoxGeometry(2.1, 0.55, 4.4),
+    neus: new THREE.BoxGeometry(1.9, 0.3, 1.2),
+    kap: new THREE.BoxGeometry(1.5, 0.48, 1.9),
+    spoiler: new THREE.BoxGeometry(2.0, 0.08, 0.5),
+    wiel: new THREE.CylinderGeometry(0.42, 0.42, 0.36, 14),
+    licht: new THREE.BoxGeometry(0.55, 0.14, 0.06),
+    vrachtCabine: new THREE.BoxGeometry(2.4, 2.0, 2.4),
+    vrachtBak: new THREE.BoxGeometry(2.5, 2.6, 8),
+    stam: new THREE.CylinderGeometry(0.18, 0.32, 7, 6),
+    blad: (() => { const s = new THREE.Shape(); s.moveTo(0, 0); s.quadraticCurveTo(1.6, 0.9, 3.4, -0.6); s.quadraticCurveTo(1.6, 0.2, 0, 0); return new THREE.ShapeGeometry(s); })(),
+    schans: (() => { const g = new THREE.BufferGeometry(); const w = 2;
+      const v = [-w, 0, 0, w, 0, 0, w, 1.4, -6, -w, 1.4, -6, -w, 0, -6, w, 0, -6];
+      g.setAttribute('position', new THREE.Float32BufferAttribute(v, 3));
+      g.setIndex([0, 1, 2, 0, 2, 3, 3, 2, 5, 3, 5, 4, 0, 3, 4, 1, 5, 2]); g.computeVertexNormals(); return g; })(),
+    bol: new THREE.OctahedronGeometry(0.7, 0),
+    pijl: (() => { const s = new THREE.Shape(); s.moveTo(-1.6, 0); s.lineTo(0, -2.2); s.lineTo(1.6, 0); s.lineTo(1.6, 0.7); s.lineTo(0, -1.4); s.lineTo(-1.6, 0.7); s.closePath(); return new THREE.ShapeGeometry(s); })(),
+  };
+
+  // het verkeer krijgt een eenvoudiger model: er rijden er tientallen tegelijk
+  function maakAuto(kleur, speler = false) {
+    const g = new THREE.Group();
+    const romp = neonDeel(GEO.romp, kleur, { vul: 0x0e0718 }); romp.position.y = 0.55; g.add(romp);
+    const kap = neonDeel(GEO.kap, speler ? 0x67e8f9 : 0xf0abfc, { vul: 0x05101c, metaal: 0.9 }); kap.position.set(0, 1.05, 0.25); g.add(kap);
+    if (speler) {
+      const neus = neonDeel(GEO.neus, kleur, { vul: 0x0e0718 }); neus.position.set(0, 0.45, -2.6); g.add(neus);
+      const spoiler = neonDeel(GEO.spoiler, kleur, { vul: 0x0e0718 }); spoiler.position.set(0, 1.15, 2.05); g.add(spoiler);
+    }
+    for (const [x, z] of speler ? [[-1.05, -1.4], [1.05, -1.4], [-1.05, 1.4], [1.05, 1.4]] : []) {
+      const w = neonDeel(GEO.wiel, speler ? 0x22d3ee : 0x94a3b8, { vul: 0x050505, sterkte: 1.6 });
+      w.rotation.z = Math.PI / 2; w.position.set(x, 0.42, z); g.add(w);
+      g.userData.wielen = (g.userData.wielen || []).concat(w);
+    }
+    // achterlichten (de auto rijdt richting -z, dus de achterkant is +z)
+    const lichtMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(3.4, 0.3, 0.5), toneMapped: false });
+    for (const x of [-0.7, 0.7]) { const l = new THREE.Mesh(GEO.licht, lichtMat); l.position.set(x, 0.62, 2.22); g.add(l); }
+    g.userData.achterGloed = speler ? [-0.7, 0.7].map(x => { const s = gloed(0xff2050, 1.4, 1.2); s.position.set(x, 0.62, 2.35); g.add(s); return s; }) : [];
+    // knipperlichten voor het wisselen van rijstrook
+    g.userData.knipper = [-1, 1].map(k => { const s = gloed(0xffa020, 1.1, 1.8); s.position.set(k * 1.0, 0.7, 2.3); s.visible = false; g.add(s); return s; });
+    if (speler) {
+      const onder = gloed(0xd946ef, 7, 0.55); onder.position.set(0, 0.06, 0); onder.scale.set(6, 9, 1); g.add(onder);
+      const koplamp = new THREE.PointLight(0x67e8f9, 10, 30, 1.6); koplamp.position.set(0, 1.2, -6); g.add(koplamp);
+    }
+    return g;
+  }
+  function maakVrachtwagen(kleur) {
+    const g = new THREE.Group();
+    const cab = neonDeel(GEO.vrachtCabine, kleur, { vul: 0x0e0718 }); cab.position.set(0, 1.3, -4.6); g.add(cab);
+    const bak = neonDeel(GEO.vrachtBak, 0xfde047, { vul: 0x0a0612, sterkte: 1.8, metaal: 0.2 }); bak.position.set(0, 1.7, 0.6); g.add(bak);
+    const lichtMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(3.4, 0.3, 0.5), toneMapped: false });
+    for (const x of [-1, 1]) { const l = new THREE.Mesh(GEO.licht, lichtMat); l.position.set(x, 0.6, 4.62); g.add(l); }
+    g.userData.knipper = [-1, 1].map(k => { const s = gloed(0xffa020, 1.2, 1.8); s.position.set(k * 1.2, 0.8, 4.7); s.visible = false; g.add(s); return s; });
+    return g;
+  }
+  function maakPalm(kleur) {
+    const g = new THREE.Group();
+    const stam = neonDeel(GEO.stam, 0x7c3aed, { vul: 0x0a0414, sterkte: 1.4 });
+    stam.position.y = 3.5; stam.rotation.z = (Math.random() - 0.5) * 0.25; g.add(stam);
+    for (let i = 0; i < 7; i++) {
+      const b = new THREE.Group();
+      const m = new THREE.Mesh(GEO.blad, new THREE.MeshBasicMaterial({ color: 0x07020d, side: THREE.DoubleSide }));
+      const r = new THREE.LineSegments(new THREE.EdgesGeometry(GEO.blad), new THREE.LineBasicMaterial({ color: neonKleur(kleur, 2), toneMapped: false }));
+      b.add(m, r);
+      b.rotation.y = i / 7 * Math.PI * 2; b.rotation.z = -0.35;
+      b.position.y = 7;
+      g.add(b);
+    }
+    return g;
+  }
+
+  // palmen en lantaarnpalen langs de weg (worden telkens opnieuw achteraan gezet)
+  const PALM_N = 26, PALM_AFSTAND = 34;
+  const palmen = [];
+  for (let i = 0; i < PALM_N; i++) {
+    const kant = i % 2 ? 1 : -1;
+    const p = maakPalm(i % 4 < 2 ? 0x22d3ee : 0xf472b6);
+    p.position.set(kant * willekeurig(14, 19), 0, -Math.floor(i / 2) * PALM_AFSTAND * 2 - (kant > 0 ? PALM_AFSTAND : 0));
+    p.scale.setScalar(willekeurig(0.9, 1.3));
+    scene.add(p); palmen.push(p);
+  }
+  const PAAL_N = 16;
+  const palen = [];
+  const paalGeo = new THREE.BoxGeometry(0.25, 6, 0.25);
+  for (let i = 0; i < PAAL_N; i++) {
+    const g = new THREE.Group();
+    for (const kant of [-1, 1]) {
+      const p = neonDeel(paalGeo, 0x22d3ee, { vul: 0x050a12, sterkte: 1.8 }); p.position.set(kant * 11.3, 3, 0); g.add(p);
+      const l = gloed(0x67e8f9, 3, 1.2); l.position.set(kant * 11.3, 6.1, 0); g.add(l);
+    }
+    g.position.z = -i * 60;
+    scene.add(g); palen.push(g);
+  }
+
+  /* ════════════════════════════════════════════════════════════
+     Deeltjes (vonken, vuur, stof) — één puntenwolk
+  ════════════════════════════════════════════════════════════ */
+  const D_N = 3500;
+  const dPos = new Float32Array(D_N * 3), dKleur = new Float32Array(D_N * 3), dGrootte = new Float32Array(D_N), dAlfa = new Float32Array(D_N);
+  const dVel = new Float32Array(D_N * 3), dLeven = new Float32Array(D_N), dMax = new Float32Array(D_N), dBegin = new Float32Array(D_N);
+  let dVolgende = 0;
+  const dGeo = new THREE.BufferGeometry();
+  dGeo.setAttribute('position', new THREE.BufferAttribute(dPos, 3).setUsage(THREE.DynamicDrawUsage));
+  dGeo.setAttribute('kleur', new THREE.BufferAttribute(dKleur, 3).setUsage(THREE.DynamicDrawUsage));
+  dGeo.setAttribute('grootte', new THREE.BufferAttribute(dGrootte, 1).setUsage(THREE.DynamicDrawUsage));
+  dGeo.setAttribute('alfa', new THREE.BufferAttribute(dAlfa, 1).setUsage(THREE.DynamicDrawUsage));
+  const deeltjesMat = new THREE.ShaderMaterial({
+    uniforms: { uSchaal: { value: 1 } },
+    vertexShader: `attribute float grootte; attribute float alfa; attribute vec3 kleur; uniform float uSchaal; varying float vA; varying vec3 vK;
+      void main(){ vA = alfa; vK = kleur; vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_PointSize = grootte * uSchaal * (380.0 / max(0.5, -mv.z)); gl_Position = projectionMatrix * mv; }`,
+    fragmentShader: `varying float vA; varying vec3 vK; void main(){ float d = length(gl_PointCoord - 0.5); if (d > 0.5) discard; float a = smoothstep(0.5, 0.0, d); gl_FragColor = vec4(vK * (0.6 + a * 1.6), a * vA); }`,
+    blending: THREE.AdditiveBlending, transparent: true, depthWrite: false,
+  });
+  const deeltjesObj = new THREE.Points(dGeo, deeltjesMat);
+  deeltjesObj.frustumCulled = false;
+  scene.add(deeltjesObj);
+  const tmpKleur = new THREE.Color();
+  function deeltje(x, y, z, vx, vy, vz, kleur, grootte, leven) {
+    const i = dVolgende; dVolgende = (dVolgende + 1) % D_N;
+    dPos.set([x, y, z], i * 3); dVel.set([vx, vy, vz], i * 3);
+    tmpKleur.set(kleur); dKleur.set([tmpKleur.r, tmpKleur.g, tmpKleur.b], i * 3);
+    dGrootte[i] = dBegin[i] = grootte; dLeven[i] = dMax[i] = leven; dAlfa[i] = 1;
+  }
+  function updateDeeltjes(v) {
+    for (let i = 0; i < D_N; i++) {
+      if (dLeven[i] <= 0) { if (dAlfa[i]) dAlfa[i] = 0; continue; }
+      dLeven[i]--;
+      dVel[i * 3] *= 0.95; dVel[i * 3 + 1] = dVel[i * 3 + 1] * 0.95 - 0.006; dVel[i * 3 + 2] *= 0.95;
+      dPos[i * 3] += dVel[i * 3]; dPos[i * 3 + 1] = Math.max(0.05, dPos[i * 3 + 1] + dVel[i * 3 + 1]); dPos[i * 3 + 2] += dVel[i * 3 + 2] + v;
+      const p = dLeven[i] / dMax[i];
+      dAlfa[i] = Math.min(1, p * 1.6); dGrootte[i] = dBegin[i] * (0.4 + p * 0.6);
+    }
+    for (const k of ['position', 'kleur', 'grootte', 'alfa']) dGeo.attributes[k].needsUpdate = true;
+  }
+  function vonken(x, y, z, kleur, n, kracht = 0.4) {
+    for (let i = 0; i < n; i++) deeltje(x, y, z, (Math.random() - 0.5) * kracht * 2, Math.random() * kracht, (Math.random() - 0.5) * kracht * 2, Math.random() < 0.25 ? 0xffffff : kleur, 0.4 + Math.random() * 0.8, 25 + Math.random() * 30);
+  }
+
+  /* ════════════════════════════════════════════════════════════
+     De auto van de speler, met lichtsporen
+  ════════════════════════════════════════════════════════════ */
+  const auto = maakAuto(0x22d3ee, true);
+  scene.add(auto);
+  const SPOOR_N = 40;
+  const sporen = [-0.7, 0.7].map(dx => {
+    const pos = new Float32Array(SPOOR_N * 3);
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const lijn = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: new THREE.Color(3.2, 0.4, 0.9), transparent: true, opacity: 0.85, toneMapped: false }));
+    lijn.frustumCulled = false; scene.add(lijn);
+    return { dx, pos, geo, lijn };
+  });
+
+  /* ════════════════════════════════════════════════════════════
+     Geluid: motor, effecten en een synthwave-soundtrack
+  ════════════════════════════════════════════════════════════ */
+  let motor = null;
+  function sfx(soort) {
+    const g = geluid;
+    switch (soort) {
+      case 'crash':    g.knal(1.0, 0.8, 2600); g.toon(160, 0.8, 'sawtooth', 0.2, 30); break;
+      case 'rakelings': if (g.mag(soort, 150)) { g.knal(0.25, 0.12, 6000, 1500); g.toon(900, 0.15, 'sine', 0.06, 1600); } break;
+      case 'bol':      g.toon(1320, 0.08, 'triangle', 0.08, 1760); break;
+      case 'boost':    g.knal(0.9, 0.3, 5000, 300); g.toon(220, 0.7, 'sawtooth', 0.08, 880); break;
+      case 'sprong':   g.toon(300, 0.5, 'sine', 0.12, 900); break;
+      case 'landing':  g.knal(0.3, 0.3, 900); break;
+      case 'mijlpaal': [523, 659, 784, 1047].forEach((f, i) => g.toon(f, 0.14, 'square', 0.07, null, i * 0.08)); break;
+      case 'gameover': [392, 311, 247, 196].forEach((f, i) => g.toon(f, 0.4, 'sawtooth', 0.12, null, i * 0.22)); break;
+    }
+  }
+  // een kleine sequencer: bas, arpeggio en drums worden telkens een stukje vooruit ingepland
+  const MUZIEK = {
+    tempo: 108, stap: 0, volgende: 0,
+    akkoorden: [[57, 60, 64], [53, 57, 60], [48, 52, 55], [55, 59, 62]],   // Am – F – C – G
+  };
+  const noot = n => 440 * Math.pow(2, (n - 69) / 12);
+  function muziek() {
+    if (!geluid.aan || toestand === 'pauze' || toestand === 'laden') return;
+    const nu = geluid.nu;
+    if (!nu) return;
+    const zestiende = 60 / MUZIEK.tempo / 4;
+    if (MUZIEK.volgende < nu) MUZIEK.volgende = nu + 0.05;
+    while (MUZIEK.volgende < nu + 0.25) {
+      const s = MUZIEK.stap, wacht = MUZIEK.volgende - nu;
+      const akk = MUZIEK.akkoorden[Math.floor(s / 32) % 4];
+      const zacht = toestand === 'menu' || toestand === 'over' ? 0.6 : 1;
+      if (s % 2 === 0) geluid.toon(noot(akk[0] - 24), zestiende * 1.8, 'sawtooth', 0.05 * zacht, null, wacht);          // bas
+      geluid.toon(noot(akk[[0, 1, 2, 1][s % 4]] + 12), zestiende * 0.9, 'square', 0.012 * zacht, null, wacht);          // arpeggio
+      if (s % 8 === 0) geluid.toon(noot(akk[2] + 24), zestiende * 6, 'triangle', 0.02 * zacht, null, wacht);            // melodietoon
+      if (toestand === 'spelen') {
+        if (s % 4 === 0) geluid.toon(120, 0.18, 'sine', 0.16, 40, wacht);                                               // bassdrum
+        if (s % 8 === 4) geluid.toon(220, 0.1, 'triangle', 0.05, 120, wacht);                                           // snare-achtig
+      }
+      MUZIEK.stap++;
+      MUZIEK.volgende += zestiende;
+    }
+  }
+  setInterval(muziek, 60);
+
+  /* ════════════════════════════════════════════════════════════
+     Spelstaat
+  ════════════════════════════════════════════════════════════ */
+  const STROKEN = [-8, -4, 0, 4, 8];
+  const RAND = 9.2;
+  let toestand = 'menu', tijd = 0;
+  const speler = { x: 0, vx: 0, y: 0, vy: 0, levens: 3, inv: 0, nitro: 40, nitroAan: false, boost: 0, kanteling: 0, dood: false };
+  let snelheid = 0.6, afstand = 0, score = 0, verkeer = [], dingen = [], volgendeRij = 0, volgendeBol = 0, volgendeSchans = 0, volgendeBoost = 0, mijlpaal = 2000;
+  let stats = { rakelings: 0, sprongen: 0, inhalen: 0, topsnelheid: 0 };
+  let schok = 0, eindTimer = 0, meldingTimer = 0, bannerTimer = 0;
+  let record = recordOpslag.lees();
+
+  function zetToestand(t) { toestand = t; document.body.dataset.toestand = t; }
+  function melding(tekst, kleur) {
+    const m = $('melding'); m.textContent = tekst; m.style.color = kleur; m.style.textShadow = `0 0 14px ${kleur}, 0 0 30px ${kleur}`;
+    m.classList.add('toon'); meldingTimer = 55;
+  }
+  function zetBanner(tekst, kleur) {
+    const t = $('bannerTitel'); t.textContent = tekst; t.style.color = kleur; t.style.textShadow = `0 0 18px ${kleur}, 0 0 40px ${kleur}`;
+    $('banner').style.opacity = 1; bannerTimer = 130;
+  }
+  function flitsScherm(s) { const f = $('flits'); f.style.transition = 'none'; f.style.opacity = s; requestAnimationFrame(() => { f.style.transition = 'opacity 0.6s'; f.style.opacity = 0; }); }
+
+  const basisSnelheid = () => Math.min(2.6, 1.0 + afstand * 0.00011);
+  const kmu = v => Math.round(v * 108);
+  const meters = () => Math.floor(afstand * 0.5);
+
+  /* ── Verkeer en dingen op de weg ─────────── */
+  const VERKEER_KLEUREN = [0xf472b6, 0xa78bfa, 0xfb923c, 0x4ade80, 0xfde047, 0x60a5fa];
+  function spawnRij() {
+    const aantal = Math.random() < 0.35 + Math.min(0.4, afstand / 30000) ? 2 : 1;
+    const vrij = [0, 1, 2, 3, 4].sort(() => Math.random() - 0.5).slice(0, Math.min(3, aantal));
+    for (const s of vrij) {
+      const vracht = Math.random() < 0.18;
+      const obj = vracht ? maakVrachtwagen(VERKEER_KLEUREN[Math.floor(Math.random() * VERKEER_KLEUREN.length)]) : maakAuto(VERKEER_KLEUREN[Math.floor(Math.random() * VERKEER_KLEUREN.length)]);
+      obj.position.set(STROKEN[s], 0, -580 - Math.random() * 30);
+      scene.add(obj);
+      verkeer.push({ obj, strook: s, doelX: STROKEN[s], v: willekeurig(0.45, 0.8), lengte: vracht ? 10 : 4.6, breedte: vracht ? 2.5 : 2.1, wissel: Math.random() < 0.25 ? willekeurig(-260, -90) : null, knipper: 0, voorbij: false, rakelings: false, overgesprongen: false });
+    }
+  }
+  function spawnBollen() {
+    const s = Math.floor(Math.random() * 5);
+    for (let i = 0; i < 6; i++) {
+      const g = neonDeel(GEO.bol, 0xf0abfc, { vul: 0x1a0420, sterkte: 3 });
+      g.add(gloed(0xe879f9, 3, 1.2));
+      g.position.set(STROKEN[s], 1.2, -700 - i * 7);
+      scene.add(g); dingen.push({ soort: 'bol', obj: g });
+    }
+  }
+  function spawnSchans() {
+    const s = 1 + Math.floor(Math.random() * 3);
+    const g = neonDeel(GEO.schans, 0xfde047, { vul: 0x1a1404, sterkte: 2.6 });
+    g.position.set(STROKEN[s], 0, -700);
+    scene.add(g); dingen.push({ soort: 'schans', obj: g, x: STROKEN[s] });
+    // vlak erachter wat verkeer om overheen te springen
+    const obj = maakAuto(0xfb923c);
+    obj.position.set(STROKEN[s], 0, -745);
+    scene.add(obj);
+    verkeer.push({ obj, strook: s, doelX: STROKEN[s], v: 0.5, lengte: 4.6, breedte: 2.1, wissel: null, knipper: 0, voorbij: false, rakelings: false, overgesprongen: false });
+  }
+  function spawnBoost() {
+    const s = Math.floor(Math.random() * 5);
+    const g = new THREE.Group();
+    for (let i = 0; i < 3; i++) {
+      const p = new THREE.Mesh(GEO.pijl, new THREE.MeshBasicMaterial({ color: new THREE.Color(0.4, 3, 3.2), transparent: true, opacity: 0.9, toneMapped: false, side: THREE.DoubleSide }));
+      p.rotation.x = -Math.PI / 2; p.position.set(0, 0.05, -i * 2.2); g.add(p);
+    }
+    g.position.set(STROKEN[s], 0, -700);
+    scene.add(g); dingen.push({ soort: 'boost', obj: g, x: STROKEN[s] });
+  }
+
+  /* ── Botsingen en bonussen ───────────────── */
+  function crash(v) {
+    if (speler.inv > 0 || speler.dood) return;
+    speler.levens--;
+    speler.inv = 130;
+    speler.boost = 0; speler.nitroAan = false;
+    snelheid *= 0.35;
+    vonken(auto.position.x, 1, -1, 0xff6a3d, 160, 0.6);
+    vonken(auto.position.x, 1, -1, 0x22d3ee, 60, 0.5);
+    schok = 1.6; flitsScherm(0.5);
+    sfx('crash');
+    if (v) { v.obj.position.z -= 6; v.v = Math.min(v.v + 0.4, snelheid + 0.6); }
+    if (speler.levens <= 0) { speler.dood = true; eindTimer = 120; vonken(auto.position.x, 1, 0, 0xffb347, 400, 0.9); }
+  }
+
+  /* ════════════════════════════════════════════════════════════
+     Update
+  ════════════════════════════════════════════════════════════ */
+  const toetsen = {};
+  let doelX = null, veeg = null, nitroKnop = false;
+
+  function updateSpel() {
+    const s = speler;
+    // snelheid: basis loopt op, nitro en boost-pads geven extra
+    const wilNitro = (toetsen[' '] || toetsen.arrowup || toetsen.w || nitroKnop) && s.nitro > 0 && !s.dood;
+    if (wilNitro && !s.nitroAan) sfx('boost');
+    s.nitroAan = wilNitro;
+    $('nitroKnop').classList.toggle('aan', s.nitroAan);
+    if (s.nitroAan) s.nitro = Math.max(0, s.nitro - 0.45);
+    if (s.boost > 0) s.boost--;
+    const doelV = s.dood ? 0 : basisSnelheid() * (s.nitroAan ? 1.45 : 1) * (s.boost > 0 ? 1.35 : 1);
+    snelheid += (doelV - snelheid) * (doelV > snelheid ? 0.012 : 0.03);
+    afstand += snelheid;
+    stats.topsnelheid = Math.max(stats.topsnelheid, kmu(snelheid));
+    if (!s.dood) score += snelheid * (s.nitroAan ? 2 : 1) * 1.5;
+
+    // sturen
+    if (!s.dood) {
+      const k = (toetsen.arrowright || toetsen.d ? 1 : 0) - (toetsen.arrowleft || toetsen.a ? 1 : 0);
+      let doelVx;
+      if (k) { doelX = null; doelVx = k * 0.42; }
+      else if (doelX !== null) doelVx = THREE.MathUtils.clamp((doelX - s.x) * 0.14, -0.55, 0.55);
+      else doelVx = 0;
+      s.vx += (doelVx - s.vx) * 0.25;
+      s.x = THREE.MathUtils.clamp(s.x + s.vx, -RAND, RAND);
+    }
+    // springen en landen
+    if (s.y > 0 || s.vy > 0) {
+      s.vy -= 0.022; s.y += s.vy;
+      if (s.y <= 0) { s.y = 0; s.vy = 0; schok = Math.max(schok, 0.5); sfx('landing'); vonken(s.x, 0.2, 1, 0xf0abfc, 30, 0.3); }
+      else score += 2;
+    }
+    if (s.inv > 0) s.inv--;
+    s.kanteling += (s.vx * -0.5 - s.kanteling) * 0.2;
+
+    // nieuwe dingen op de weg (gemeten in afgelegde afstand)
+    volgendeRij -= snelheid; volgendeBol -= snelheid; volgendeSchans -= snelheid; volgendeBoost -= snelheid;
+    if (volgendeRij <= 0) { spawnRij(); volgendeRij = Math.max(32, 66 - afstand / 400) * willekeurig(0.8, 1.25); }
+    if (volgendeBol <= 0) { spawnBollen(); volgendeBol = willekeurig(150, 260); }
+    if (volgendeSchans <= 0 && afstand > 600) { spawnSchans(); volgendeSchans = willekeurig(700, 1100); volgendeRij = Math.max(volgendeRij, 60); }
+    if (volgendeBoost <= 0 && afstand > 300) { spawnBoost(); volgendeBoost = willekeurig(450, 750); }
+
+    // verkeer
+    for (const v of verkeer) {
+      const oudZ = v.obj.position.z;
+      v.obj.position.z += snelheid - v.v;
+      const z = v.obj.position.z;
+      // soms van rijstrook wisselen: eerst een tijdje knipperen
+      if (v.wissel !== null && z > v.wissel) {
+        const kant = v.strook === 0 ? 1 : v.strook === 4 ? -1 : Math.random() < 0.5 ? -1 : 1;
+        v.strook += kant; v.knipper = 70; v.richting = kant; v.wissel = null;
+      }
+      if (v.knipper > 0) {
+        v.knipper--;
+        const aan = Math.floor(v.knipper / 8) % 2 === 0;
+        v.obj.userData.knipper.forEach((k, i) => { k.visible = aan && (i === 0 ? v.richting < 0 : v.richting > 0); });
+        if (v.knipper < 30) v.doelX = STROKEN[v.strook];
+      } else v.obj.userData.knipper.forEach(k => { k.visible = false; });
+      v.obj.position.x += (v.doelX - v.obj.position.x) * 0.04;
+      v.obj.rotation.y = (v.doelX - v.obj.position.x) * -0.05;
+      if (v.obj.userData.wielen) for (const w of v.obj.userData.wielen) w.rotation.x -= v.v * 0.6;
+
+      // botsing: overlappen in x en z, en de speler is niet in de lucht
+      const dx = Math.abs(v.obj.position.x - s.x), dz = Math.abs(z - 0);
+      if (!s.dood && dx < (2.1 + v.breedte) / 2 * 0.88 && dz < (4.4 + v.lengte) / 2 * 0.88) {
+        if (s.y < 1.6) crash(v);
+        else if (!v.overgesprongen) { v.overgesprongen = true; score += 250; stats.sprongen++; melding('SPRONG! +250', '#fde047'); }
+      }
+      // ingehaald? dan kijken of het rakelings was
+      if (!v.voorbij && oudZ < 0 && z >= 0) {
+        v.voorbij = true;
+        stats.inhalen++;
+        if (!s.dood && s.inv === 0 && s.y < 1.6 && dx < 3.6 && dx > 1.9) { stats.rakelings++; score += 100; s.nitro = Math.min(100, s.nitro + 6); melding('RAKELINGS! +100', '#67e8f9'); sfx('rakelings'); }
+      }
+      if (z > 30) { v.weg = true; scene.remove(v.obj); }
+    }
+    verkeer = verkeer.filter(v => !v.weg);
+
+    for (const d of dingen) {
+      const oudZ = d.obj.position.z;
+      d.obj.position.z += snelheid;
+      const z = d.obj.position.z;
+      if (d.soort === 'bol') {
+        d.obj.rotation.y += 0.05;
+        if (!s.dood && Math.abs(z) < 2.2 && Math.abs(d.obj.position.x - s.x) < 1.9 && Math.abs(1.2 - s.y - 0.6) < 2.2) {
+          d.weg = true; s.nitro = Math.min(100, s.nitro + 9); score += 50; sfx('bol');
+          vonken(d.obj.position.x, 1.2, z, 0xe879f9, 18, 0.25);
+        }
+      } else if (oudZ < 0 && z >= 0 && Math.abs(d.x - s.x) < 2.4 && !s.dood) {
+        if (d.soort === 'schans' && s.y < 0.3) { s.vy = 0.5 + snelheid * 0.09; s.y = 0.01; sfx('sprong'); melding('SCHANS!', '#fde047'); }
+        if (d.soort === 'boost') { s.boost = 130; sfx('boost'); melding('BOOST!', '#67e8f9'); schok = Math.max(schok, 0.6); }
+      }
+      if (z > 30 || d.weg) { d.weg = true; scene.remove(d.obj); }
+    }
+    dingen = dingen.filter(d => !d.weg);
+
+    if (meters() >= mijlpaal / 2) { zetBanner(getal(mijlpaal / 2) + ' METER!', '#f0abfc'); sfx('mijlpaal'); mijlpaal += 2000; }
+    if (s.dood && --eindTimer <= 0) gameOver();
+  }
+
+  function gameOver() {
+    zetToestand('over');
+    sfx('gameover');
+    const nieuw = score > record;
+    if (nieuw) { record = Math.floor(score); recordOpslag.bewaar(record); }
+    $('nieuwRecord').textContent = nieuw && score > 0 ? '★ NIEUW RECORD! ★' : '';
+    $('eindStats').innerHTML = [['Score', getal(score)], ['Afstand', getal(meters()) + ' m'], ['Topsnelheid', stats.topsnelheid + ' km/u'], ['Ingehaald', stats.inhalen], ['Rakelings', stats.rakelings], ['Over auto\'s gesprongen', stats.sprongen], ['Record', getal(record)]]
+      .map(([k, v]) => `<div>${k}</div><div>${v}</div>`).join('');
+  }
+
+  function updateWereld() {
+    const v = toestand === 'menu' ? 0.9 : snelheid;
+    if (toestand === 'menu') afstand += v;
+    wegMat.uniforms.uAfstand.value = afstand;
+    rasterMat.uniforms.uAfstand.value = afstand;
+    zon.material.uniforms.uTijd.value = tijd / 60;
+    for (const p of palmen) { p.position.z += v; if (p.position.z > 30) p.position.z -= PALM_N * PALM_AFSTAND; }
+    for (const p of palen) { p.position.z += v; if (p.position.z > 30) p.position.z -= PAAL_N * 60; }
+    // de auto
+    auto.position.set(speler.x, speler.y, 0);
+    auto.rotation.set(speler.vy * -0.4, speler.vx * -0.25, speler.kanteling * 0.6);
+    auto.visible = !(speler.inv > 0 && Math.floor(speler.inv / 5) % 2) && !(speler.dood && eindTimer < 100);
+    for (const w of auto.userData.wielen) w.rotation.x -= v * 0.6;
+    const nitroKleur = speler.nitroAan || speler.boost > 0;
+    auto.userData.achterGloed.forEach(g => g.scale.setScalar(nitroKleur ? 1.9 + Math.random() * 0.5 : 1.3));
+    if (toestand === 'spelen' && !speler.dood && (nitroKleur || Math.random() < 0.3))
+      for (const dx of [-0.7, 0.7]) deeltje(speler.x + dx, speler.y + 0.5, 2.4, (Math.random() - 0.5) * 0.05, Math.random() * 0.03, 0.2 + Math.random() * 0.2, nitroKleur ? (Math.random() < 0.5 ? 0x67e8f9 : 0xf0abfc) : 0xff3060, nitroKleur ? 0.8 : 0.5, 18);
+    if (speler.dood && toestand === 'spelen' && Math.random() < 0.6) vonken(speler.x, 1, 0, 0xff6a3d, 4, 0.3);
+    // lichtsporen: oude punten schuiven mee met de wereld
+    for (const sp of sporen) {
+      for (let i = SPOOR_N - 1; i > 0; i--) { sp.pos[i * 3] = sp.pos[(i - 1) * 3]; sp.pos[i * 3 + 1] = sp.pos[(i - 1) * 3 + 1]; sp.pos[i * 3 + 2] = sp.pos[(i - 1) * 3 + 2] + v; }
+      sp.pos[0] = speler.x + sp.dx; sp.pos[1] = speler.y + 0.62; sp.pos[2] = 2.3;
+      sp.geo.attributes.position.needsUpdate = true;
+      sp.lijn.visible = auto.visible;
+    }
+    updateDeeltjes(v);
+  }
+
+  function updateCamera() {
+    const s = speler, v = toestand === 'menu' ? 0.9 : snelheid;
+    let cx, cy, cz, lx, ly, lz;
+    if (toestand === 'menu') {
+      const a = Math.sin(tijd * 0.004) * 0.9;
+      cx = Math.sin(a) * 11; cy = 2.6 + Math.sin(tijd * 0.006) * 0.8; cz = Math.cos(a) * 11 - 1;
+      lx = 0; ly = 1; lz = -6;
+    } else {
+      // op een smal (staand) scherm volgt de camera de auto strakker, anders valt hij uit beeld
+      const volg = camera.aspect < 1 ? 0.92 : 0.6;
+      cx = s.x * volg; cy = 3.4 + s.y * 0.6; cz = 8.5 - Math.min(2, v * 0.6);
+      lx = s.x * Math.max(0.85, volg); ly = 1.2 + s.y * 0.4; lz = -24;
+    }
+    camera.position.x += (cx - camera.position.x) * 0.1;
+    camera.position.y += (cy - camera.position.y) * 0.1;
+    camera.position.z += (cz - camera.position.z) * 0.1;
+    if (schok > 0.01) { camera.position.x += (Math.random() - 0.5) * schok; camera.position.y += (Math.random() - 0.5) * schok * 0.6; schok *= 0.88; }
+    camera.lookAt(lx, ly, lz);
+    camera.rotateZ(s.kanteling * 0.08);
+    // hoe harder je gaat, hoe breder het beeld
+    camera.fov += ((62 + v * 9 + (speler.nitroAan ? 8 : 0)) - camera.fov) * 0.05;
+    camera.updateProjectionMatrix();
+    zonLicht.position.set(camera.position.x, 6, -20);
+  }
+
+  function werkHudBij() {
+    $('score').textContent = getal(score);
+    $('record').textContent = getal(Math.max(record, score));
+    $('afstand').textContent = getal(meters()) + ' m';
+    $('levens').textContent = '♥'.repeat(Math.max(0, speler.levens));
+    $('nitroBalk').style.width = speler.nitro + '%';
+    $('snelheid').textContent = kmu(snelheid);
+  }
+
+  /* ════════════════════════════════════════════════════════════
+     Lus
+  ════════════════════════════════════════════════════════════ */
+  const STAP = 1000 / 60;
+  let vorige = null, acc = 0, beeldTijden = [], verlaagd = 0;
+  function frame(nu) {
+    if (vorige === null) vorige = nu;
+    const dt = Math.min(250, nu - vorige);
+    vorige = nu; acc += dt;
+    let n = 0;
+    while (acc >= STAP && n++ < 4) {
+      tijd++;
+      if (toestand !== 'pauze') {
+        if (toestand === 'spelen') updateSpel();
+        updateWereld();
+        if (meldingTimer > 0 && --meldingTimer === 0) $('melding').classList.remove('toon');
+        if (bannerTimer > 0 && --bannerTimer === 0) $('banner').style.opacity = 0;
+      }
+      acc -= STAP;
+    }
+    if (acc > STAP * 4) acc = 0;
+    updateCamera();
+    if (toestand === 'spelen') werkHudBij();
+    // motorgeluid volgt de snelheid
+    if (motor) motor.zet(55 + snelheid * 38 + (speler.nitroAan ? 25 : 0), toestand === 'spelen' && !speler.dood ? 0.05 : 0);
+    composer.render();
+    beeldTijden.push(dt);
+    if (beeldTijden.length > 90) {
+      const gem = beeldTijden.reduce((a, b) => a + b, 0) / beeldTijden.length;
+      beeldTijden = [];
+      if (gem > 24 && pixelRatio > 0.6 && verlaagd < 6) { pixelRatio = Math.max(0.6, pixelRatio - 0.25); verlaagd++; maatAanpassen(); }
+    }
+    requestAnimationFrame(frame);
+  }
+
+  /* ════════════════════════════════════════════════════════════
+     Start, pauze en invoer
+  ════════════════════════════════════════════════════════════ */
+  function startGeluid() { geluid.start(); if (!motor) motor = geluid.doorlopend('sawtooth', 700); }
+  function nieuwSpel() {
+    startGeluid();
+    for (const v of verkeer) scene.remove(v.obj);
+    for (const d of dingen) scene.remove(d.obj);
+    verkeer = []; dingen = [];
+    Object.assign(speler, { x: 0, vx: 0, y: 0, vy: 0, levens: 3, inv: 60, nitro: 40, nitroAan: false, boost: 0, kanteling: 0, dood: false });
+    snelheid = 0.5; afstand = 0; score = 0; volgendeRij = 60; volgendeBol = 120; volgendeSchans = 900; volgendeBoost = 400; mijlpaal = 2000;
+    stats = { rakelings: 0, sprongen: 0, inhalen: 0, topsnelheid: 0 };
+    eindTimer = 0; doelX = null;
+    zetToestand('spelen');
+    zetBanner('GAS EROP!', '#67e8f9');
+  }
+  function pauze(aan) {
+    if (toestand === 'spelen' && aan !== false) { zetToestand('pauze'); for (const k in toetsen) toetsen[k] = false; nitroKnop = false; doelX = null; veeg = null; }
+    else if (toestand === 'pauze' && aan !== true) zetToestand('spelen');
+  }
+
+  $('menuBesturing').textContent = aanraak ? 'Sleep naar links en rechts om te sturen · houd NITRO vast voor extra snelheid' : 'Muis of pijltjes/A-D om te sturen · houd spatie of ↑ vast voor nitro';
+  if (record) $('menuRecord').textContent = 'Record: ' + getal(record);
+  $('startKnop').addEventListener('click', nieuwSpel);
+  $('opnieuwKnop').addEventListener('click', nieuwSpel);
+  $('hervatKnop').addEventListener('click', () => pauze(false));
+
+  window.addEventListener('keydown', e => {
+    const k = e.key.toLowerCase();
+    if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
+    toetsen[k] = true;
+    if (e.repeat) return;
+    startGeluid();
+    if ((k === ' ' || k === 'enter') && (toestand === 'menu' || toestand === 'over')) nieuwSpel();
+    else if (k === 'enter' && toestand === 'pauze') pauze(false);
+    else if (k === 'p' || k === 'escape') pauze();
+    else if (k === 'm') geluid.wissel();
+  });
+  window.addEventListener('keyup', e => { toetsen[e.key.toLowerCase()] = false; });
+  Arcade.pauzeBijWissel(() => pauze(true));
+
+  function wegX(e) { const r = cv.getBoundingClientRect(); return ((e.clientX - r.left) / r.width * 2 - 1) * RAND * 1.25; }
+  cv.addEventListener('pointerdown', e => {
+    startGeluid();
+    if (toestand !== 'spelen') return;
+    if (e.pointerType === 'mouse') doelX = wegX(e);
+    else { veeg = { id: e.pointerId, px: e.clientX, sx: speler.x }; doelX = speler.x; }
+    try { cv.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+  cv.addEventListener('pointermove', e => {
+    if (toestand !== 'spelen') return;
+    if (e.pointerType === 'mouse') doelX = wegX(e);
+    else if (veeg && veeg.id === e.pointerId) doelX = veeg.sx + (e.clientX - veeg.px) / cv.getBoundingClientRect().width * RAND * 3.2;
+  });
+  const veegKlaar = e => { if (veeg && veeg.id === e.pointerId) { veeg = null; doelX = null; } };
+  cv.addEventListener('pointerup', veegKlaar);
+  cv.addEventListener('pointercancel', veegKlaar);
+  const nk = $('nitroKnop');
+  nk.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); nitroKnop = true; try { nk.setPointerCapture(e.pointerId); } catch (err) {} });
+  for (const ev of ['pointerup', 'pointercancel']) nk.addEventListener(ev, () => { nitroKnop = false; });
+  $('pauzeKnop').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); pauze(); });
+
+  // voor tests
+  window.race = { get speler() { return speler; }, get verkeer() { return verkeer; }, get toestand() { return toestand; }, get score() { return score; }, get snelheid() { return snelheid; }, get afstand() { return afstand; }, get stats() { return stats; },
+    nieuwSpel, updateSpel, updateWereld, set doelX(x) { doelX = x; }, set nitro(b) { nitroKnop = b; } };
+
+  maatAanpassen();
+  camera.position.set(8, 3, 9);
+  zetToestand('menu');
+  requestAnimationFrame(frame);
+  </script>
+</body>
+</html>
